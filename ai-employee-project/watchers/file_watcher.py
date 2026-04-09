@@ -62,7 +62,7 @@ class FileWatcher(BaseWatcher):
         check_interval: int = 60,
     ):
         super().__init__(vault_path, check_interval)
-        self.watch_dir = Path(watch_dir) if watch_dir else Path.home() / "Downloads/file_check"
+        self.watch_dir = Path(watch_dir) if watch_dir else Path("C:/Users/GEO COMPUTERS/Downloads/vaultFull")
         self._seen_paths: set[Path] = set()
 
     # ── BaseWatcher interface ─────────────────────────────────────────────────
@@ -237,8 +237,8 @@ if __name__ == "__main__":
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
-    vault = Path.home() / "Desktop/Hackathon/Hackathon0/AI_Employee_Vault"
-    watch = Path.home() / "Downloads/file_check"
+    vault = Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")
+    watch = Path("C:/Users/GEO COMPUTERS/Downloads/vaultFull")
 
     if len(sys.argv) > 1:
         watch = Path(sys.argv[1])
