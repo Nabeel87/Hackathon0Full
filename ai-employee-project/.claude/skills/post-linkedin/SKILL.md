@@ -138,17 +138,12 @@ When the user confirms approval (or the file appears in `Approved/`):
 
 #### Step 4a — Publish the Post
 
-Run the following Python call:
+Run the poster helper via the terminal:
 
-```
-python helpers/linkedin_poster.py --content "<post content>" [--image "<image_path>"]
-```
+    python helpers/linkedin_poster.py --content "<post content>" [--image "<image_path>"]
 
-Or from Python:
-```python
-from helpers.linkedin_poster import post_to_linkedin
-result = post_to_linkedin(content, image_path, vault_path)
-```
+Or invoke `post_to_linkedin(content, image_path, vault_path)` from
+`helpers/linkedin_poster.py`.
 
 #### Step 4b — Handle the Result
 
