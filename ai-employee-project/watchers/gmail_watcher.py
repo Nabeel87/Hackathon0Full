@@ -26,7 +26,7 @@ KEYWORDS = ["urgent", "asap", "invoice", "payment"]
 
 DEFAULT_CREDENTIALS_DIR = (
     Path.home()
-    / "Desktop/Hackathon/Hackathon0/ai-employee-project/.credentials"
+    / "Desktop/Hackathon/Hackathon0Full/ai-employee-project/.credentials"
 )
 
 
