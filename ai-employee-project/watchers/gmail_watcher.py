@@ -20,7 +20,15 @@ from helpers.dashboard_updater import update_activity, update_component_status, 
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+# Gmail API scopes
+# - gmail.readonly: Read emails (for GmailWatcher monitoring)
+# - gmail.send:     Send emails (for mcp_servers/email_server.py)
+# Both scopes share the same credentials.json and token.json.
+# If token.json was issued with readonly only, delete it and re-run to re-authorize.
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+]
 
 KEYWORDS = ["urgent", "asap", "invoice", "payment"]
 
