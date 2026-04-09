@@ -43,9 +43,9 @@ BANNER = """
 +----------------------------------------------------------+
 |           AI EMPLOYEE - 24/7 ORCHESTRATOR                |
 |                                                          |
-|   [✓] File Watcher     (60s  interval)                   |
-|   [✓] Gmail Watcher    (120s interval)                   |
-|   [✓] LinkedIn Watcher (180s interval)                   |
+|   [OK] File Watcher     (60s  interval)                  |
+|   [OK] Gmail Watcher    (120s interval)                  |
+|   [OK] LinkedIn Watcher (180s interval)                  |
 |                                                          |
 |   Dashboard :  AI_Employee_Vault/Dashboard.md            |
 |   Logs      :  logs/main.log                             |

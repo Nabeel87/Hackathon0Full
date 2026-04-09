@@ -107,18 +107,21 @@ def _launch_browser(headless: bool = True):
     """Return (playwright, browser, context, page) with stealth applied."""
     try:
         from playwright.sync_api import sync_playwright
-        from playwright_stealth import stealth_sync
     except ImportError as exc:
         raise RuntimeError(
             "Playwright not installed. Run:\n"
-            "  uv pip install playwright playwright-stealth\n"
+            "  uv pip install playwright\n"
             "  playwright install chromium"
         ) from exc
 
     pw = sync_playwright().start()
     browser = pw.chromium.launch(
         headless=headless,
-        args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+        args=[
+            "--no-sandbox",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-infobars",
+        ],
     )
     context = browser.new_context(
         user_agent=(
@@ -127,9 +130,12 @@ def _launch_browser(headless: bool = True):
             "Chrome/120.0.0.0 Safari/537.36"
         ),
         viewport={"width": 1280, "height": 800},
+        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
     )
     page = context.new_page()
-    stealth_sync(page)
+    page.add_init_script(
+        "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+    )
     return pw, browser, context, page
 
 

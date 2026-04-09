@@ -91,17 +91,20 @@ class LinkedInWatcher(BaseWatcher):
         """Launch Playwright browser and return (playwright, browser, context, page)."""
         try:
             from playwright.sync_api import sync_playwright
-            from playwright_stealth import stealth_sync
         except ImportError as exc:
             raise RuntimeError(
-                "Playwright not installed. Run: uv pip install playwright playwright-stealth "
+                "Playwright not installed. Run: uv pip install playwright "
                 "&& playwright install chromium"
             ) from exc
 
         pw = sync_playwright().start()
         browser = pw.chromium.launch(
             headless=headless,
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+            ],
         )
         context = browser.new_context(
             user_agent=(
@@ -110,9 +113,13 @@ class LinkedInWatcher(BaseWatcher):
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 800},
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
         )
         page = context.new_page()
-        stealth_sync(page)
+        # Mask webdriver flag without playwright-stealth dependency
+        page.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
         return pw, browser, context, page
 
     def _interactive_login(self) -> None:
