@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Dashboard.md",
+                "file": "Plans/PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Dashboard"
+              "title": "PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr"
             }
           }
         ]
@@ -183,8 +183,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "13b2eb857fda68ee",
+  "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
+    "Dashboard.md",
     "Plans/PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr.md",
     "Pending_Approval/EMAIL_DRAFT_20260409_181535.md",
     "Pending_Approval/EMAIL_DRAFT_20260409_181333.md",
@@ -206,7 +207,6 @@
     "Inbox/EMAIL_20260409_051015_19d70a61a6e791d4.md",
     "Inbox/EMAIL_20260409_054700_19d70c7c038924a1.md",
     "Inbox/FILE_20260409_080259_test_report_freshpdf.md",
-    "Dashboard.md",
     "Inbox/FILE_20260407_181043_test_watcher_checktxt.md",
     "Inbox/FILE_20260407_181043_test_newfiletxt.md",
     "Inbox/FILE_20260407_181043_New_Text_Documenttxt.md",
