@@ -1,0 +1,215 @@
+{
+  "main": {
+    "id": "6c6e827c1dff2423",
+    "type": "split",
+    "children": [
+      {
+        "id": "ea7320b66f784a50",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "132e4172d1ae6d09",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "e0719ef3b1287366",
+    "type": "split",
+    "children": [
+      {
+        "id": "7858e37baba2966f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "13b2eb857fda68ee",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "35e4f18ba289ee27",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "399e9215a4bc8ee5",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "27a7d3ec84135ea8",
+    "type": "split",
+    "children": [
+      {
+        "id": "0fa3253df91cec75",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4c52e2e501b64fa8",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Dashboard.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for Dashboard"
+            }
+          },
+          {
+            "id": "4a013e9d0947d541",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Dashboard.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Dashboard"
+            }
+          },
+          {
+            "id": "32ebfaf759b60841",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "0f0b291003c4e418",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "975a5dcc0866dd13",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Dashboard.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Dashboard"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "13b2eb857fda68ee",
+  "lastOpenFiles": [
+    "Dashboard.md",
+    "Inbox/EMAIL_20260409_051015_19d70a61a6e791d4.md",
+    "Inbox/EMAIL_20260407_073652_19d66df99728e748.md",
+    "Inbox/EMAIL_20260407_080049_19d66f585d5afb33.md",
+    "Inbox/EMAIL_20260407_080107_19d66f5cbf7682d3.md",
+    "Inbox/EMAIL_20260407_082340_19d670a778d8f6d7.md",
+    "Inbox/EMAIL_20260407_090154_19d672d7fd764555.md",
+    "Inbox/EMAIL_20260407_095338_19d675cd726fe8a1.md",
+    "Inbox/EMAIL_20260407_165611_19d68dfb7be814fc.md",
+    "Inbox/EMAIL_20260407_171441_19d68f09ea3ab292.md",
+    "Inbox/EMAIL_20260407_173217_19d6900bce438630.md",
+    "Inbox/FILE_20260407_181043_test_watcher_checktxt.md",
+    "Inbox/FILE_20260407_181043_test_newfiletxt.md",
+    "Inbox/FILE_20260407_181043_New_Text_Documenttxt.md",
+    "Inbox/FILE_20260407_181043_New_Rich_Text_DocumentRTF.md",
+    "Inbox/FILE_20260407_181043_meeting_Sceduletxt.md",
+    "Inbox",
+    "Done/FILE_20260405_055736_test_file_checktxt.md",
+    "Done/FILE_20260405_055736_testtxt.md",
+    "Done/FILE_20260405_055703_test_file_checktxt.md",
+    "Done/FILE_20260405_055703_testtxt.md",
+    "Done",
+    "Needs_Action/EMAIL_20260407_173217_19d6900bce438630.md",
+    "Inbox/EMAIL_20260407_172521_19d68fa621d06f20.md",
+    "Inbox/EMAIL_20260407_090004_19d672bcc67d6a36.md",
+    "Needs_Action/EMAIL_20260407_171441_19d68f09ea3ab292.md",
+    "Needs_Action/EMAIL_20260407_095338_19d675cd726fe8a1.md",
+    "Needs_Action/EMAIL_20260407_165611_19d68dfb7be814fc.md",
+    "Needs_Action",
+    "Dashboard.tmp"
+  ]
+}
