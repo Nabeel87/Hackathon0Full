@@ -1,13 +1,14 @@
 """
 main.py — AI Employee master orchestrator.
 
-Runs FileWatcher and GmailWatcher continuously in separate threads with
-automatic restart, health monitoring, and graceful shutdown.
+Runs FileWatcher, GmailWatcher, and LinkedInWatcher continuously in separate
+threads with automatic restart, health monitoring, and graceful shutdown.
 
 Usage
 -----
     python main.py
     python main.py --vault-path ~/AI_Employee_Vault --file-interval 60 --gmail-interval 120
+    python main.py --linkedin-interval 180
     python main.py --log-level DEBUG
 """
 
@@ -28,6 +29,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from watchers.file_watcher import FileWatcher
 from watchers.gmail_watcher import GmailWatcher
+from watchers.linkedin_watcher import LinkedInWatcher
 from helpers.dashboard_updater import update_activity, update_component_status
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -41,7 +43,10 @@ BANNER = """
 +----------------------------------------------------------+
 |           AI EMPLOYEE - 24/7 ORCHESTRATOR                |
 |                                                          |
-|   Watchers  :  FileWatcher  |  GmailWatcher              |
+|   [✓] File Watcher     (60s  interval)                   |
+|   [✓] Gmail Watcher    (120s interval)                   |
+|   [✓] LinkedIn Watcher (180s interval)                   |
+|                                                          |
 |   Dashboard :  AI_Employee_Vault/Dashboard.md            |
 |   Logs      :  logs/main.log                             |
 |                                                          |
@@ -184,11 +189,16 @@ class WatcherThread:
         try:
             from helpers.dashboard_updater import update_stats, refresh_vault_counts
             component_map = {
-                "FileWatcher":  ("File Monitor",  "files_monitored"),
-                "GmailWatcher": ("Gmail Monitor", "emails_checked"),
+                "FileWatcher":     ("File Monitor",          "files_monitored"),
+                "GmailWatcher":    ("Gmail Monitor",         "emails_checked"),
+                "LinkedInWatcher": ("LinkedIn Monitor Skill", "linkedin_checked"),
             }
             component, stat_key = component_map.get(self.name, (self.name, None))
-            label = "file(s)" if self.name == "FileWatcher" else "email(s)"
+            label = (
+                "file(s)"         if self.name == "FileWatcher"     else
+                "notification(s)" if self.name == "LinkedInWatcher" else
+                "email(s)"
+            )
             activity = f"{component}: {n} new {label} detected"
 
             update_activity(vault_path, activity)
@@ -208,7 +218,13 @@ class WatcherThread:
 class Orchestrator:
     """Starts, monitors, and cleanly shuts down all watcher threads."""
 
-    def __init__(self, vault_path: Path, file_interval: int, gmail_interval: int):
+    def __init__(
+        self,
+        vault_path: Path,
+        file_interval: int,
+        gmail_interval: int,
+        linkedin_interval: int,
+    ):
         self.vault_path     = vault_path
         self.logger         = logging.getLogger("orchestrator")
         self._shutdown      = threading.Event()
@@ -228,6 +244,14 @@ class Orchestrator:
                 watcher_kwargs={
                     "vault_path":     vault_path,
                     "check_interval": gmail_interval,
+                },
+            ),
+            WatcherThread(
+                name="LinkedInWatcher",
+                watcher_cls=LinkedInWatcher,
+                watcher_kwargs={
+                    "vault_path":     vault_path,
+                    "check_interval": linkedin_interval,
                 },
             ),
         ]
@@ -336,6 +360,11 @@ def _parse_args() -> argparse.Namespace:
         help="GmailWatcher poll interval in seconds (default: 120)",
     )
     parser.add_argument(
+        "--linkedin-interval",
+        type=int, default=180,
+        help="LinkedInWatcher poll interval in seconds (default: 180)",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -352,16 +381,18 @@ def main() -> None:
 
     print(BANNER)
     logger.info(f"Vault     : {args.vault_path}")
-    logger.info(f"File poll : every {args.file_interval}s")
-    logger.info(f"Gmail poll: every {args.gmail_interval}s")
+    logger.info(f"File poll    : every {args.file_interval}s")
+    logger.info(f"Gmail poll   : every {args.gmail_interval}s")
+    logger.info(f"LinkedIn poll: every {args.linkedin_interval}s")
     logger.info(f"Log level : {args.log_level}")
     logger.info(f"Log file  : {LOG_FILE}")
     logger.info("")
 
     orchestrator = Orchestrator(
-        vault_path     = Path(args.vault_path),
-        file_interval  = args.file_interval,
-        gmail_interval = args.gmail_interval,
+        vault_path        = Path(args.vault_path),
+        file_interval     = args.file_interval,
+        gmail_interval    = args.gmail_interval,
+        linkedin_interval = args.linkedin_interval,
     )
 
     # ── Graceful shutdown on CTRL+C or SIGTERM ────────────────────────────────
