@@ -1,6 +1,6 @@
 # AI Employee Company Handbook
 
-_Version: 1.0 — Bronze Tier_
+_Version: 2.0 — Silver Tier_
 
 ---
 
@@ -84,3 +84,96 @@ status: inbox | needs_action | done
 - `credentials.json` and `token.json` live in the project folder only
 - Never copied to the vault
 - Listed in `.gitignore` and never committed
+
+---
+
+## 🥈 SILVER TIER FEATURES
+
+### Human-in-the-Loop (HITL) Workflow
+
+#### Actions Requiring Approval
+All sensitive actions must be approved before execution:
+- ✅ Sending emails
+- ✅ Posting to LinkedIn
+- ✅ Making payments (future)
+- ✅ Modifying client data
+
+#### Approval Process
+1. System creates draft in `/Pending_Approval`
+2. Human reviews and decides:
+   - Approve → Move to `/Approved`
+   - Reject → Move to `/Rejected`
+3. System executes approved actions
+4. Logs all actions in `/Logs`
+
+#### Approval Timeout
+- Pending approvals expire after 24 hours
+- Auto-rejected if not decided
+- Safety measure to prevent stale approvals
+
+---
+
+### LinkedIn Integration
+
+#### LinkedIn Monitoring
+- Monitor: Messages, connection requests, post comments
+- Check interval: Every 3 minutes
+- Create tasks in `/Inbox` for relevant notifications
+
+#### LinkedIn Posting
+- Draft posts for business updates
+- Requires approval before posting
+- Track post engagement (optional)
+
+---
+
+### Plan Creation
+
+#### When to Create Plans
+- Multi-step complex tasks
+- Tasks requiring multiple days
+- Projects involving multiple people
+- Tasks with dependencies
+
+#### Plan Format
+Plans saved in `/Plans` folder with:
+- Task objective
+- Step-by-step breakdown
+- Required resources
+- Success criteria
+- Progress tracking
+
+---
+
+### Folder Workflow
+
+#### /Inbox
+Normal priority items for later review
+
+#### /Needs_Action
+High priority items requiring immediate attention
+Auto-routed if contains: urgent, asap, payment, invoice, deadline
+
+#### /Plans
+Action plans for complex multi-step tasks
+
+#### /Pending_Approval
+Actions awaiting human decision
+- Review daily
+- Approve or reject within 24 hours
+- Auto-rejects after timeout
+
+#### /Approved
+Human-approved actions
+- System executes automatically
+- Moved to /Done after execution
+
+#### /Rejected
+Declined actions with reasons
+- Archived for audit trail
+- Can be resubmitted with modifications
+
+#### /Done
+Completed tasks archive
+- Keep 90 days
+- Then auto-cleanup
