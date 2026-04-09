@@ -40,18 +40,19 @@ LOG_DIR               = _PROJECT_ROOT / "logs"
 LOG_FILE              = LOG_DIR / "main.log"
 
 BANNER = """
-+----------------------------------------------------------+
-|           AI EMPLOYEE - 24/7 ORCHESTRATOR                |
-|                                                          |
-|   [OK] File Watcher     (60s  interval)                  |
-|   [OK] Gmail Watcher    (120s interval)                  |
-|   [OK] LinkedIn Watcher (180s interval)                  |
-|                                                          |
-|   Dashboard :  AI_Employee_Vault/Dashboard.md            |
-|   Logs      :  logs/main.log                             |
-|                                                          |
-|   Press CTRL+C to shut down gracefully.                  |
-+----------------------------------------------------------+
+╔═══════════════════════════════════════════════════════╗
+║          AI Employee - Silver Tier                    ║
+║          24/7 Autonomous Monitoring                   ║
+╠═══════════════════════════════════════════════════════╣
+║  Starting watchers...                                 ║
+║  [✓] File Watcher      (60s  interval)                ║
+║  [✓] Gmail Watcher     (120s interval)                ║
+║  [✓] LinkedIn Watcher  (180s interval)                ║
+╠═══════════════════════════════════════════════════════╣
+║  Dashboard :  AI_Employee_Vault/Dashboard.md          ║
+║  Logs      :  logs/main.log                           ║
+║  Press CTRL+C to stop.                                ║
+╚═══════════════════════════════════════════════════════╝
 """
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
