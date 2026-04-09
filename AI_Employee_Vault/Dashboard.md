@@ -1,6 +1,6 @@
 # AI Employee Dashboard
 
-_Last updated: 2026-04-09 00:00:00_
+_Last updated: 2026-04-09 13:03:59_
 
 ---
 
@@ -8,8 +8,8 @@ _Last updated: 2026-04-09 00:00:00_
 
 | Component        | Status  | Last Run | Notes                  |
 |------------------|---------|----------|------------------------|
-| File Monitor     | OFFLINE | —        | —                      |
-| Gmail Monitor    | OFFLINE | —        | —                      |
+| File Monitor    | ONLINE       | 2026-04-09 13:02| OK                    |
+| Gmail Monitor   | ONLINE       | 2026-04-09 13:03| OK                    |
 | Dashboard Updater| OFFLINE | —        | —                      |
 | Inbox Processor  | OFFLINE | —        | —                      |
 
@@ -19,9 +19,9 @@ _Last updated: 2026-04-09 00:00:00_
 
 | Metric              | Value |
 |---------------------|-------|
-| Files monitored     | 0     |
-| Emails checked      | 0     |
-| Tasks in Inbox      | 0     |
+| Files monitored     | 1     |
+| Emails checked      | 11     |
+| Tasks in Inbox      | 12     |
 | Tasks in Needs_Action | 0   |
 | Tasks completed     | 0     |
 
@@ -29,7 +29,9 @@ _Last updated: 2026-04-09 00:00:00_
 
 ## Recent Activity
 
-_No activity yet._
+- `2026-04-09 13:03` -- Gmail Monitor: 11 new email(s) detected
+- `2026-04-09 13:02` -- File Monitor: 1 new file(s) detected
+- `2026-04-09 13:02` -- Orchestrator started — all watchers launching
 
 ## Current Alerts
 
