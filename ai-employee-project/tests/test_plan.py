@@ -284,11 +284,11 @@ class TestPlanCreation(unittest.TestCase):
         self.assertIsInstance(low_result["word_count"], int, "word_count must be an int")
         self.assertIsInstance(low_result["keywords"],   set,  "keywords must be a set")
 
-        print(f"\n  'Fix typo in README'          → complexity=low — OK")
-        print(f"  'Migrate database to PostgreSQL' → complexity=high, domain=database — OK")
-        print(f"  'Implement auth module'          → complexity=medium — OK")
-        print(f"  'Send invoice email'             → domain=email — OK")
-        print(f"  'Post LinkedIn update'           → domain=linkedin — OK")
+        print(f"\n  'Fix typo in README'          -> complexity=low - OK")
+        print(f"  'Migrate database to PostgreSQL' -> complexity=high, domain=database - OK")
+        print(f"  'Implement auth module'          -> complexity=medium - OK")
+        print(f"  'Send invoice email'             -> domain=email - OK")
+        print(f"  'Post LinkedIn update'           -> domain=linkedin - OK")
         print(f"  Return structure (complexity, domain, word_count, keywords): OK")
 
     # ── 6. Plan creation ──────────────────────────────────────────────────────

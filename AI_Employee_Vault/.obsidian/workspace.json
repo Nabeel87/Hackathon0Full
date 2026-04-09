@@ -185,6 +185,11 @@
   },
   "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
+    "Plans/PLAN_20260409_183147_deploy_containerised_backend_service_to.md",
+    "Plans/PLAN_20260409_183146_migrate_sqlite_database_to_postgresql_wi.md",
+    "Plans/PLAN_20260409_183146_design_and_implement_a_rest_api_endpoint.md",
+    "Plans/PLAN_20260409_183117_migrate_sqlite_database_to_postgresql_wi.md",
+    "Plans/PLAN_20260409_183117_design_and_implement_a_rest_api_endpoint.md",
     "Dashboard.md",
     "Plans/PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr.md",
     "Pending_Approval/EMAIL_DRAFT_20260409_181535.md",
@@ -208,12 +213,7 @@
     "Inbox/EMAIL_20260409_054700_19d70c7c038924a1.md",
     "Inbox/FILE_20260409_080259_test_report_freshpdf.md",
     "Inbox/FILE_20260407_181043_test_watcher_checktxt.md",
-    "Inbox/FILE_20260407_181043_test_newfiletxt.md",
-    "Inbox/FILE_20260407_181043_New_Text_Documenttxt.md",
-    "Inbox/FILE_20260407_181043_New_Rich_Text_DocumentRTF.md",
-    "Inbox/FILE_20260407_181043_meeting_Sceduletxt.md",
     "Inbox",
-    "Done/FILE_20260405_055736_test_file_checktxt.md",
     "Dashboard.tmp"
   ]
 }
