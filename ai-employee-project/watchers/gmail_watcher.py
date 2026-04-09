@@ -293,7 +293,7 @@ if __name__ == "__main__":
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
-    vault = Path.home() / "Desktop/Hackathon/Hackathon0/AI_Employee_Vault"
+    vault = Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")
     interval = 300
 
     if len(sys.argv) > 1:

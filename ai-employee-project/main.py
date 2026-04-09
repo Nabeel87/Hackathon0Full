@@ -322,7 +322,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--vault-path",
-        default=str(Path.home() / "Desktop/Hackathon/Hackathon0/AI_Employee_Vault"),
+        default=str(Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")),
         help="Path to the AI Employee Vault (default: ~/Desktop/.../AI_Employee_Vault)",
     )
     parser.add_argument(

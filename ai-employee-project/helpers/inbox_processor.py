@@ -236,7 +236,7 @@ def main() -> None:
     parser.add_argument(
         "--vault",
         default=str(
-            Path.home() / "Desktop/Hackathon/Hackathon0/AI_Employee_Vault"
+            Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")
         ),
         help="Path to the vault root (default: ~/Desktop/.../AI_Employee_Vault)",
     )
