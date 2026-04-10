@@ -1,6 +1,6 @@
 # AI Employee Dashboard
 
-_Last updated: 2026-04-09 23:32:18_
+_Last updated: 2026-04-10 22:55:55_
 
 ---
 
@@ -30,7 +30,7 @@ _Last updated: 2026-04-09 23:32:18_
 | Plans created         | 0     |
 | Pending approvals     | 0     |
 | Actions approved      | 0     |
-| Actions rejected      | 0     |
+| Actions rejected      | 1     |
 
 ---
 
@@ -44,6 +44,7 @@ Check `/Pending_Approval` folder for items awaiting decision.
 
 ## Recent Activity
 
+- `2026-04-10 22:55` -- approval-checker: auto-rejected 1 expired approval
 - `2026-04-09 23:32` -- Plan created: Deploy containerised backend service to AWS ECS with health 
 - `2026-04-09 23:32` -- Plan created: Migrate SQLite database to PostgreSQL with zero-downtime dep
 - `2026-04-09 23:32` -- Plan created: Design and implement a REST API endpoint for user profile up
@@ -63,7 +64,6 @@ Check `/Pending_Approval` folder for items awaiting decision.
 - `2026-04-09 15:31` -- Orchestrator shut down gracefully
 - `2026-04-09 15:31` -- Orchestrator started — all watchers launching
 - `2026-04-09 13:55` -- Orchestrator shut down gracefully
-- `2026-04-09 13:03` -- Gmail Monitor: 11 new email(s) detected
 
 ## Current Alerts
 
