@@ -183,8 +183,13 @@
       "bases:Create new base": false
     }
   },
-  "active": "132e4172d1ae6d09",
+  "active": "13b2eb857fda68ee",
   "lastOpenFiles": [
+    "Archive/Rejected",
+    "Archive/Done",
+    "Archive",
+    "Reports/DAILY_SUMMARY_20260410.md",
+    "Reports",
     "Rejected/TEST_EXPIRED_20260410_225555.md",
     "Pending_Approval/TEST_EXPIRED_20260410_225555.md",
     "Pending_Approval/TEST_APPROVAL_20260410_225555.md",
@@ -211,8 +216,6 @@
     "Inbox/EMAIL_20260407_080107_19d66f5cbf7682d3.md",
     "Inbox/EMAIL_20260407_082340_19d670a778d8f6d7.md",
     "Inbox/EMAIL_20260407_090154_19d672d7fd764555.md",
-    "Inbox/EMAIL_20260407_095338_19d675cd726fe8a1.md",
-    "Inbox/EMAIL_20260407_165611_19d68dfb7be814fc.md",
     "Inbox",
     "Dashboard.tmp"
   ]
