@@ -44,6 +44,11 @@ STAT_LABELS: dict[str, str] = {
     "tasks_in_inbox":        "Tasks in Inbox",
     "tasks_in_needs_action": "Tasks in Needs_Action",
     "tasks_completed":       "Tasks completed",
+    "linkedin_checked":      "LinkedIn checked",
+    "plans_created":         "Plans created",
+    "pending_approvals":     "Pending approvals",
+    "actions_approved":      "Actions approved",
+    "actions_rejected":      "Actions rejected",
 }
 
 # Maps the public component key → exact text in the System Status table
@@ -52,6 +57,7 @@ COMPONENT_NAMES: dict[str, str] = {
     "gmail monitor":      "Gmail Monitor",
     "dashboard updater":  "Dashboard Updater",
     "inbox processor":    "Inbox Processor",
+    "approval checker":   "Approval Checker",
 }
 
 # Maps CLI/code status name → display string written into the table
