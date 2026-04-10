@@ -3,12 +3,14 @@ main.py — AI Employee master orchestrator.
 
 Runs FileWatcher, GmailWatcher, and LinkedInWatcher continuously in separate
 threads with automatic restart, health monitoring, and graceful shutdown.
+A BackgroundScheduler runs four automated tasks alongside the watchers.
 
 Usage
 -----
     python main.py
-    python main.py --vault-path ~/AI_Employee_Vault --file-interval 60 --gmail-interval 120
-    python main.py --linkedin-interval 180
+    python main.py --vault-path ~/AI_Employee_Vault --file-interval 60
+    python main.py --gmail-interval 120 --linkedin-interval 180
+    python main.py --no-scheduler
     python main.py --log-level DEBUG
 """
 
@@ -27,10 +29,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+
 from watchers.file_watcher import FileWatcher
 from watchers.gmail_watcher import GmailWatcher
 from watchers.linkedin_watcher import LinkedInWatcher
 from helpers.dashboard_updater import update_activity, update_component_status
+from scheduler.scheduled_tasks import get_scheduled_tasks
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -39,20 +46,47 @@ RESTART_DELAY         = 10    # seconds to wait before restarting a crashed watc
 LOG_DIR               = _PROJECT_ROOT / "logs"
 LOG_FILE              = LOG_DIR / "main.log"
 
+# Keys in the task-registry dict that are not APScheduler add_job() kwargs
+_REGISTRY_ONLY_KEYS = {"description"}
+
 BANNER = """
-╔═══════════════════════════════════════════════════════╗
-║          AI Employee - Silver Tier                    ║
-║          24/7 Autonomous Monitoring                   ║
-╠═══════════════════════════════════════════════════════╣
-║  Starting watchers...                                 ║
-║  [✓] File Watcher      (60s  interval)                ║
-║  [✓] Gmail Watcher     (120s interval)                ║
-║  [✓] LinkedIn Watcher  (180s interval)                ║
-╠═══════════════════════════════════════════════════════╣
-║  Dashboard :  AI_Employee_Vault/Dashboard.md          ║
-║  Logs      :  logs/main.log                           ║
-║  Press CTRL+C to stop.                                ║
-╚═══════════════════════════════════════════════════════╝
++-------------------------------------------------------+
+|          AI Employee - Silver Tier                    |
+|          24/7 Autonomous Monitoring                   |
++-------------------------------------------------------+
+|  Starting watchers...                                 |
+|  [+] File Watcher      (60s  interval)                |
+|  [+] Gmail Watcher     (120s interval)                |
+|  [+] LinkedIn Watcher  (180s interval)                |
++-------------------------------------------------------+
+|  Starting scheduled tasks...                          |
+|  [+] Check Approval Timeouts  (every hour)            |
+|  [+] Generate Daily Summary   (daily at 6 PM)         |
+|  [+] Cleanup Old Files        (weekly, Sunday 00:00)  |
+|  [+] Health Check             (every 30 minutes)      |
++-------------------------------------------------------+
+|  Dashboard :  AI_Employee_Vault/Dashboard.md          |
+|  Logs      :  logs/main.log                           |
+|  Press CTRL+C to stop.                                |
++-------------------------------------------------------+
+"""
+
+BANNER_NO_SCHEDULER = """
++-------------------------------------------------------+
+|          AI Employee - Silver Tier                    |
+|          24/7 Autonomous Monitoring                   |
++-------------------------------------------------------+
+|  Starting watchers...                                 |
+|  [+] File Watcher      (60s  interval)                |
+|  [+] Gmail Watcher     (120s interval)                |
+|  [+] LinkedIn Watcher  (180s interval)                |
++-------------------------------------------------------+
+|  Scheduler disabled (--no-scheduler)                  |
++-------------------------------------------------------+
+|  Dashboard :  AI_Employee_Vault/Dashboard.md          |
+|  Logs      :  logs/main.log                           |
+|  Press CTRL+C to stop.                                |
++-------------------------------------------------------+
 """
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
@@ -72,14 +106,13 @@ def _setup_logging(log_level: str) -> logging.Logger:
 
     root = logging.getLogger()
     root.setLevel(level)
-    # Avoid duplicate handlers on re-import
-    if not root.handlers:
-        root.addHandler(file_handler)
-        root.addHandler(console_handler)
-    else:
-        root.handlers.clear()
-        root.addHandler(file_handler)
-        root.addHandler(console_handler)
+    root.handlers.clear()
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
+
+    # Quiet APScheduler's own verbose logging unless DEBUG is requested
+    if log_level.upper() != "DEBUG":
+        logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
     return logging.getLogger("orchestrator")
 
@@ -93,14 +126,14 @@ class WatcherThread:
     """
 
     def __init__(self, name: str, watcher_cls, watcher_kwargs: dict):
-        self.name          = name
-        self.watcher_cls   = watcher_cls
+        self.name           = name
+        self.watcher_cls    = watcher_cls
         self.watcher_kwargs = watcher_kwargs
-        self.logger        = logging.getLogger(f"orchestrator.{name}")
+        self.logger         = logging.getLogger(f"orchestrator.{name}")
         self._thread: threading.Thread | None = None
-        self._watcher = None
-        self._stop_event   = threading.Event()
-        self.restart_count = 0
+        self._watcher       = None
+        self._stop_event    = threading.Event()
+        self.restart_count  = 0
         self.last_started: datetime | None = None
         self.last_error: str | None = None
 
@@ -161,7 +194,9 @@ class WatcherThread:
                 items = self._watcher.check_for_updates()
             except Exception as exc:
                 self.last_error = str(exc)
-                self.logger.error(f"{self.name} check_for_updates failed: {exc}", exc_info=True)
+                self.logger.error(
+                    f"{self.name} check_for_updates failed: {exc}", exc_info=True
+                )
                 items = []
 
             created = []
@@ -171,7 +206,9 @@ class WatcherThread:
                     created.append(path)
                     self.logger.info(f"Card created: {path.name}")
                 except Exception as exc:
-                    self.logger.error(f"create_action_file failed: {exc}", exc_info=True)
+                    self.logger.error(
+                        f"create_action_file failed: {exc}", exc_info=True
+                    )
 
             # ── dashboard update after every cycle ────────────────────────────
             if created:
@@ -179,7 +216,7 @@ class WatcherThread:
 
             # ── sleep in 1-second ticks ───────────────────────────────────────
             elapsed = 0
-            while self._stop_event.is_set() is False and elapsed < check_interval:
+            while not self._stop_event.is_set() and elapsed < check_interval:
                 self._stop_event.wait(timeout=1)
                 elapsed += 1
 
@@ -190,8 +227,8 @@ class WatcherThread:
         try:
             from helpers.dashboard_updater import update_stats, refresh_vault_counts
             component_map = {
-                "FileWatcher":     ("File Monitor",          "files_monitored"),
-                "GmailWatcher":    ("Gmail Monitor",         "emails_checked"),
+                "FileWatcher":     ("File Monitor",           "files_monitored"),
+                "GmailWatcher":    ("Gmail Monitor",          "emails_checked"),
                 "LinkedInWatcher": ("LinkedIn Monitor Skill", "linkedin_checked"),
             }
             component, stat_key = component_map.get(self.name, (self.name, None))
@@ -206,7 +243,6 @@ class WatcherThread:
             update_component_status(vault_path, component, "online")
             if stat_key:
                 update_stats(vault_path, stat_key, n, operation="increment")
-            # Resync inbox/needs_action/done counts accurately
             refresh_vault_counts(vault_path)
 
             self.logger.info(f"Dashboard updated: {activity}")
@@ -214,10 +250,59 @@ class WatcherThread:
             self.logger.warning(f"Dashboard update failed: {exc}")
 
 
+# ── Scheduler helpers ─────────────────────────────────────────────────────────
+
+def _build_scheduler(vault_path: Path, logger: logging.Logger) -> BackgroundScheduler:
+    """
+    Create a BackgroundScheduler and register all tasks from get_scheduled_tasks().
+
+    Uses coalesce=True and max_instances=1 so a slow task never piles up.
+    Does NOT call scheduler.start() — that is the caller's responsibility.
+    """
+    sched = BackgroundScheduler(
+        job_defaults={
+            "coalesce":           True,
+            "max_instances":      1,
+            "misfire_grace_time": 60,
+        },
+    )
+
+    tasks = get_scheduled_tasks(str(vault_path))
+
+    for task in tasks:
+        # Strip registry-only metadata keys before passing to APScheduler
+        job_kwargs = {k: v for k, v in task.items() if k not in _REGISTRY_ONLY_KEYS}
+
+        if task["trigger"] == "interval":
+            trigger = IntervalTrigger(
+                hours=task.get("hours", 0),
+                minutes=task.get("minutes", 0),
+            )
+        else:  # cron
+            trigger = CronTrigger(
+                hour=task.get("hour"),
+                minute=task.get("minute"),
+                day_of_week=task.get("day_of_week"),
+            )
+
+        # Replace the 'trigger' string key with the concrete trigger object
+        job_kwargs.pop("trigger")
+        sched.add_job(trigger=trigger, replace_existing=True, **job_kwargs)
+
+        logger.info(
+            f"Scheduled: {task['name']:<30}  {task.get('description', '')}"
+        )
+
+    return sched
+
+
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
 class Orchestrator:
-    """Starts, monitors, and cleanly shuts down all watcher threads."""
+    """
+    Starts, monitors, and cleanly shuts down all watcher threads and the
+    background task scheduler.
+    """
 
     def __init__(
         self,
@@ -225,10 +310,13 @@ class Orchestrator:
         file_interval: int,
         gmail_interval: int,
         linkedin_interval: int,
+        enable_scheduler: bool = True,
     ):
-        self.vault_path     = vault_path
-        self.logger         = logging.getLogger("orchestrator")
-        self._shutdown      = threading.Event()
+        self.vault_path       = vault_path
+        self.enable_scheduler = enable_scheduler
+        self.logger           = logging.getLogger("orchestrator")
+        self._shutdown        = threading.Event()
+        self._scheduler: BackgroundScheduler | None = None
 
         self._watchers: list[WatcherThread] = [
             WatcherThread(
@@ -263,16 +351,40 @@ class Orchestrator:
         self.logger.info("Orchestrator starting...")
         update_activity(self.vault_path, "Orchestrator started — all watchers launching")
 
+        # ── Start watcher threads ─────────────────────────────────────────────
         for wt in self._watchers:
             wt.start()
-
         self.logger.info(f"All {len(self._watchers)} watcher(s) started.")
+
+        # ── Start background scheduler ────────────────────────────────────────
+        if self.enable_scheduler:
+            self.logger.info("Initializing task scheduler...")
+            self._scheduler = _build_scheduler(self.vault_path, self.logger)
+            self._scheduler.start()
+            self.logger.info("Scheduler started successfully.")
+            try:
+                update_activity(
+                    self.vault_path,
+                    "Scheduler started — 4 automated tasks registered",
+                )
+            except Exception:
+                pass
+        else:
+            self.logger.info("Scheduler disabled (--no-scheduler).")
+
+        self._log_scheduled_tasks_info()
         self._main_loop()
 
     def shutdown(self) -> None:
-        self.logger.info("Shutdown requested — stopping all watchers...")
+        self.logger.info("Shutdown requested — stopping all components...")
         self._shutdown.set()
 
+        # ── Stop scheduler first (non-blocking) ───────────────────────────────
+        if self._scheduler is not None and self._scheduler.running:
+            self._scheduler.shutdown(wait=False)
+            self.logger.info("Scheduler stopped.")
+
+        # ── Stop watcher threads ──────────────────────────────────────────────
         for wt in self._watchers:
             wt.stop()
             self.logger.info(f"  {wt.name} stopped.")
@@ -282,12 +394,12 @@ class Orchestrator:
         except Exception:
             pass
 
-        self.logger.info("All watchers stopped. Goodbye.")
+        self.logger.info("All components stopped. Goodbye.")
 
     # ── Main loop ─────────────────────────────────────────────────────────────
 
     def _main_loop(self) -> None:
-        """Block the main thread, running health checks and dashboard refreshes until shutdown."""
+        """Block the main thread, running health checks and dashboard refreshes."""
         last_health    = time.monotonic()
         last_dashboard = time.monotonic()
 
@@ -305,24 +417,25 @@ class Orchestrator:
             self._shutdown.wait(timeout=5)
 
     def _refresh_dashboard(self) -> None:
-        """Sync vault folder counts and update component statuses every 60s."""
+        """Sync vault folder counts and component statuses every 60s."""
         try:
             from helpers.dashboard_updater import refresh_vault_counts
             refresh_vault_counts(self.vault_path)
-            self.logger.info("Dashboard refreshed (60s tick).")
+            self.logger.debug("Dashboard refreshed (60s tick).")
         except Exception as exc:
             self.logger.warning(f"Dashboard refresh failed: {exc}")
 
     # ── Health check ──────────────────────────────────────────────────────────
 
     def _health_check(self) -> None:
-        self.logger.info("── Health check ──────────────────────────────────")
+        self.logger.info("-- Health check -----------------------------------------------")
         all_ok = True
 
+        # ── Watcher threads ───────────────────────────────────────────────────
         for wt in self._watchers:
-            status = "ALIVE" if wt.is_alive else "DEAD"
+            status   = "ALIVE" if wt.is_alive else "DEAD"
             restarts = wt.restart_count
-            since = wt.last_started.strftime("%H:%M:%S") if wt.last_started else "—"
+            since    = wt.last_started.strftime("%H:%M:%S") if wt.last_started else "--"
             self.logger.info(
                 f"  {wt.name:<15} {status:<6}  restarts={restarts}  "
                 f"started={since}"
@@ -331,11 +444,48 @@ class Orchestrator:
             if not wt.is_alive and not self._shutdown.is_set():
                 all_ok = False
                 self.logger.warning(f"  {wt.name} is not alive — restarting...")
+                wt.restart_count += 1
                 wt.start()
 
-        status_line = "All watchers healthy." if all_ok else "Restart(s) triggered."
+        # ── Scheduler ─────────────────────────────────────────────────────────
+        if self._scheduler is not None:
+            sched_status = "RUNNING" if self._scheduler.running else "STOPPED"
+            self.logger.info(f"  {'Scheduler':<15} {sched_status}")
+            if not self._scheduler.running and not self._shutdown.is_set():
+                all_ok = False
+                self.logger.warning("  Scheduler stopped unexpectedly — restarting...")
+                try:
+                    self._scheduler.start()
+                except Exception as exc:
+                    self.logger.error(f"  Scheduler restart failed: {exc}")
+
+        status_line = "All components healthy." if all_ok else "Restart(s) triggered."
         self.logger.info(f"  {status_line}")
-        self.logger.info("──────────────────────────────────────────────────")
+        self.logger.info("---------------------------------------------------------------")
+
+    # ── Startup info ──────────────────────────────────────────────────────────
+
+    def _log_scheduled_tasks_info(self) -> None:
+        """Log a summary of registered scheduled tasks after startup."""
+        if not self.enable_scheduler or self._scheduler is None:
+            self.logger.info("No scheduled tasks (scheduler disabled).")
+            return
+
+        self.logger.info("Scheduled tasks registered:")
+        self.logger.info("  Task                           Trigger")
+        self.logger.info("  ------------------------------ ---------------------------")
+        for job in self._scheduler.get_jobs():
+            self.logger.info(f"  {job.name:<30} {job.trigger}")
+
+        self.logger.info("")
+        self.logger.info("Available scheduled tasks:")
+        self.logger.info("  - Approval timeout check : every hour")
+        self.logger.info("  - Daily summary          : daily at 6 PM")
+        self.logger.info("  - File cleanup           : weekly on Sunday midnight")
+        self.logger.info("  - Health check           : every 30 minutes")
+        self.logger.info("")
+        self.logger.info("To disable scheduler: python main.py --no-scheduler")
+        self.logger.info("")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -343,12 +493,14 @@ class Orchestrator:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="main",
-        description="AI Employee — 24/7 orchestrator for all watchers.",
+        description="AI Employee — 24/7 orchestrator for watchers and scheduled tasks.",
     )
     parser.add_argument(
         "--vault-path",
-        default=str(Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")),
-        help="Path to the AI Employee Vault (default: ~/Desktop/.../AI_Employee_Vault)",
+        default=str(Path(
+            "C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault"
+        )),
+        help="Path to the AI Employee Vault (default: AI_Employee_Vault)",
     )
     parser.add_argument(
         "--file-interval",
@@ -366,6 +518,11 @@ def _parse_args() -> argparse.Namespace:
         help="LinkedInWatcher poll interval in seconds (default: 180)",
     )
     parser.add_argument(
+        "--no-scheduler",
+        action="store_true",
+        help="Run without the background task scheduler",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -380,13 +537,16 @@ def main() -> None:
     args   = _parse_args()
     logger = _setup_logging(args.log_level)
 
-    print(BANNER)
-    logger.info(f"Vault     : {args.vault_path}")
+    banner = BANNER_NO_SCHEDULER if args.no_scheduler else BANNER
+    print(banner)
+
+    logger.info(f"Vault        : {args.vault_path}")
     logger.info(f"File poll    : every {args.file_interval}s")
     logger.info(f"Gmail poll   : every {args.gmail_interval}s")
     logger.info(f"LinkedIn poll: every {args.linkedin_interval}s")
-    logger.info(f"Log level : {args.log_level}")
-    logger.info(f"Log file  : {LOG_FILE}")
+    logger.info(f"Scheduler    : {'disabled' if args.no_scheduler else 'enabled'}")
+    logger.info(f"Log level    : {args.log_level}")
+    logger.info(f"Log file     : {LOG_FILE}")
     logger.info("")
 
     orchestrator = Orchestrator(
@@ -394,6 +554,7 @@ def main() -> None:
         file_interval     = args.file_interval,
         gmail_interval    = args.gmail_interval,
         linkedin_interval = args.linkedin_interval,
+        enable_scheduler  = not args.no_scheduler,
     )
 
     # ── Graceful shutdown on CTRL+C or SIGTERM ────────────────────────────────
