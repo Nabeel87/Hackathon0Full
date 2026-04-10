@@ -537,7 +537,7 @@ def print_scheduler_status(vault_path: str | None = None) -> None:
         return
 
     jobs = sched.get_jobs()
-    sep  = "─" * 70
+    sep  = "-" * 70
     print(f"\n{sep}")
     print(f"  {'JOB ID':<35} {'NEXT RUN':<22} TRIGGER")
     print(sep)
