@@ -114,24 +114,40 @@ class FileWatcher(BaseWatcher):
             self.logger.warning(f"Dashboard update failed: {e}")
 
     def create_action_file(self, item: dict) -> Path:
-        """Write a FILE_*.md card to vault Inbox/ and return its path."""
-        vault_inbox = self.vault_path / "Inbox"
-        vault_inbox.mkdir(parents=True, exist_ok=True)
+        """
+        Write a FILE_*.md card to the vault and return its path.
 
+        Routing:
+          priority == 'high'   → Needs_Action/
+          priority == 'normal' → Inbox/
+        """
         dt: datetime = item["detected_at"]
+        priority = _infer_priority(item["name"], item["suffix"])
+
+        # Determine target folder based on priority
+        if priority == "high":
+            target_folder = self.vault_path / "Needs_Action"
+        else:
+            target_folder = self.vault_path / "Inbox"
+
+        # Ensure folder exists
+        target_folder.mkdir(parents=True, exist_ok=True)
+
         ts_slug = dt.strftime("%Y%m%d_%H%M%S")
         name_slug = _safe_slug(item["name"])
-        card_path = vault_inbox / f"FILE_{ts_slug}_{name_slug}.md"
+        filename = f"FILE_{ts_slug}_{name_slug}.md"
+
+        # Create file in appropriate folder
+        action_file = target_folder / filename
 
         size_kb = item["size_bytes"] / 1024
         detected_iso = dt.strftime("%Y-%m-%d %H:%M:%S UTC")
         # Use forward slashes so Windows paths are safe in YAML
         file_path_safe = item["path"].as_posix()
         file_type = item["suffix"] or "unknown"
-        priority = _infer_priority(item["name"], item["suffix"])
         actions = _suggested_actions(item["suffix"])
 
-        card_path.write_text(
+        action_file.write_text(
             f"""---
 type: file
 file_name: "{item['name']}"
@@ -140,6 +156,7 @@ file_size: "{size_kb:.1f} KB"
 file_type: "{file_type}"
 detected_at: "{detected_iso}"
 priority: {priority}
+routed_to: "{target_folder.name}"
 status: pending
 ---
 
@@ -150,6 +167,7 @@ status: pending
 **Type:** {file_type}
 **Detected:** {detected_iso}
 **Priority:** {priority}
+**Routed To:** {target_folder.name}/
 
 ---
 
@@ -165,7 +183,10 @@ _Add context here as you process this file._
 """,
             encoding="utf-8",
         )
-        return card_path
+        self.logger.info(
+            f"Created {filename} in {target_folder.name}/ (priority: {priority})"
+        )
+        return action_file
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -186,10 +207,18 @@ def _safe_slug(text: str, max_len: int = 40) -> str:
     return slug[:max_len]
 
 
+_HIGH_PRIORITY_KEYWORDS = re.compile(
+    r"urgent|asap|emergency|critical|deadline|important|payment|invoice|contract",
+    re.IGNORECASE,
+)
+
+_HIGH_PRIORITY_SUFFIXES = {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip", ".exe", ".dmg"}
+
+
 def _infer_priority(name: str, suffix: str) -> str:
-    if suffix in {".pdf", ".docx", ".doc", ".xlsx", ".xls", ".zip", ".exe", ".dmg"}:
+    if suffix in _HIGH_PRIORITY_SUFFIXES:
         return "high"
-    if re.search(r"urgent|invoice|contract|payment|asap", name, re.IGNORECASE):
+    if _HIGH_PRIORITY_KEYWORDS.search(name):
         return "high"
     return "normal"
 
