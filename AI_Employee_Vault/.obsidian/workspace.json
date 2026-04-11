@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Done/EMAIL_DRAFT_20260411_183720.md",
+                "file": "Dashboard.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "EMAIL_DRAFT_20260411_183720"
+              "title": "Dashboard"
             }
           }
         ]
@@ -185,9 +185,10 @@
   },
   "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
+    "Plans/PLAN_20260411_184940_launch_a_digital_marketing_campaign_for.md",
+    "Done/EMAIL_DRAFT_20260411_183720.md",
     "Dashboard.md",
     "Approved/EMAIL_DRAFT_20260411_183720.md",
-    "Done/EMAIL_DRAFT_20260411_183720.md",
     "Inbox/EMAIL_20260411_172434_19d7d932d1589941.md",
     "Needs_Action/EMAIL_20260411_171946_19d7d8ec47f208ab.md",
     "Inbox/EMAIL_20260411_171659_19d7d8c388b225f6.md",
@@ -210,7 +211,6 @@
     "Inbox/EMAIL_20260407_173217_19d6900bce438630.md",
     "Needs_Action/FILE_20260409_080259_test_report_freshpdf.md",
     "Rejected/EMAIL_20260409_051015_19d70a61a6e791d4.md",
-    "Plans/PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr.md",
     "Archive/Rejected",
     "Archive/Done",
     "Archive",
