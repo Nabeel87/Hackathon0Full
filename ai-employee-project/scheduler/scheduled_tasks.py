@@ -120,7 +120,8 @@ def check_approval_timeouts(vault_path: str) -> dict | None:
 
 def generate_daily_summary(vault_path: str) -> dict | None:
     """
-    Count today's activity across all vault folders and write a summary report.
+    Count today's activity AND total vault state across all folders,
+    then write a comprehensive summary report.
 
     Schedule: every day at 18:00 (6 PM)
     Output:   AI_Employee_Vault/Reports/DAILY_SUMMARY_YYYYMMDD.md
@@ -133,7 +134,7 @@ def generate_daily_summary(vault_path: str) -> dict | None:
         vault = Path(vault_path)
         today = datetime.now().date()
 
-        # ── Count files touched today in every vault folder ───────────────────
+        # ── Folders to scan ───────────────────────────────────────────────────
         watch_folders: dict[str, Path] = {
             "Inbox":            vault / "Inbox",
             "Needs_Action":     vault / "Needs_Action",
@@ -144,48 +145,142 @@ def generate_daily_summary(vault_path: str) -> dict | None:
             "Done":             vault / "Done",
         }
 
-        counts: dict[str, int] = {}
+        # ── Today's new/modified file counts ──────────────────────────────────
+        today_counts: dict[str, int] = {}
+        total_counts: dict[str, int] = {}
         for name, folder in watch_folders.items():
             if folder.exists():
-                counts[name] = sum(
-                    1 for f in folder.glob("*.md")
+                all_md = list(folder.glob("*.md"))
+                today_counts[name] = sum(
+                    1 for f in all_md
                     if datetime.fromtimestamp(f.stat().st_mtime).date() == today
                 )
+                total_counts[name] = len(all_md)
             else:
-                counts[name] = 0
+                today_counts[name] = 0
+                total_counts[name] = 0
 
-        total_activity = sum(counts.values())
+        total_today   = sum(today_counts.values())
+        total_overall = sum(total_counts.values())
+
+        # ── Pull cumulative watcher stats from Dashboard.md ───────────────────
+        emails_checked   = "—"
+        files_monitored  = "—"
+        linkedin_checked = "—"
+        whatsapp_checked = "—"
+        try:
+            dashboard_md = vault / "Dashboard.md"
+            if dashboard_md.exists():
+                import re as _re
+                text = dashboard_md.read_text(encoding="utf-8")
+                def _stat(label: str) -> str:
+                    m = _re.search(rf"\|\s*{_re.escape(label)}\s*\|\s*(\S+)\s*\|", text)
+                    return m.group(1) if m else "—"
+                emails_checked   = _stat("Emails checked")
+                files_monitored  = _stat("Files monitored")
+                linkedin_checked = _stat("LinkedIn checked")
+                whatsapp_checked = _stat("WhatsApp checked")
+        except Exception:
+            pass
+
+        # ── Pending-approval list ─────────────────────────────────────────────
+        pending_dir = vault / "Pending_Approval"
+        pending_items: list[str] = []
+        if pending_dir.exists():
+            for f in sorted(pending_dir.glob("*.md")):
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                # Extract action_type or type from frontmatter
+                action = "unknown"
+                for line in text.splitlines()[:15]:
+                    if line.startswith("action_type:"):
+                        action = line.split(":", 1)[1].strip()
+                        break
+                    if line.startswith("subject:"):
+                        action = "email: " + line.split(":", 1)[1].strip().strip('"')
+                        break
+                pending_items.append(f"  - `{f.name}` ({action})")
+
+        # ── Active plans list ─────────────────────────────────────────────────
+        plans_dir = vault / "Plans"
+        active_plans: list[str] = []
+        if plans_dir.exists():
+            for f in sorted(plans_dir.glob("PLAN_*.md"), reverse=True):
+                text = f.read_text(encoding="utf-8", errors="ignore")
+                title = f.stem.replace("_", " ").title()
+                for line in text.splitlines():
+                    if line.startswith("# Plan:"):
+                        title = line[7:].strip()[:70]
+                        break
+                active_plans.append(f"  - `{f.name}`  {title}")
+
+        # ── Needs-action snapshot ─────────────────────────────────────────────
+        needs_dir = vault / "Needs_Action"
+        needs_items: list[str] = []
+        if needs_dir.exists():
+            for f in sorted(needs_dir.glob("*.md"))[:5]:   # show up to 5
+                needs_items.append(f"  - `{f.name}`")
+            remaining = total_counts.get("Needs_Action", 0) - len(needs_items)
+            if remaining > 0:
+                needs_items.append(f"  - … and {remaining} more")
 
         # ── Build report content ──────────────────────────────────────────────
         generated_ts = datetime.now().isoformat(timespec="seconds")
-        header_date  = today.strftime("%B %d, %Y")          # e.g. April 09, 2026
+        header_date  = today.strftime("%B %d, %Y")
         date_slug    = today.strftime("%Y%m%d")
+        gen_time     = datetime.now().strftime("%H:%M")
+
+        pending_block = "\n".join(pending_items) if pending_items else "  _(none)_"
+        plans_block   = "\n".join(active_plans)  if active_plans  else "  _(none)_"
+        needs_block   = "\n".join(needs_items)   if needs_items   else "  _(none)_"
 
         content = (
             "---\n"
             "type: daily_summary\n"
             f"date: {today.isoformat()}\n"
             f"generated: {generated_ts}\n"
+            f"total_activity_today: {total_today}\n"
+            f"total_vault_items: {total_overall}\n"
             "---\n\n"
             f"# Daily Summary — {header_date}\n\n"
-            "## Activity Overview\n\n"
-            "**New/Modified Items Today:**\n\n"
-            f"| Folder            | Count |\n"
-            f"|-------------------|-------|\n"
-            f"| Inbox             | {counts.get('Inbox', 0):>5} |\n"
-            f"| Needs Action      | {counts.get('Needs_Action', 0):>5} |\n"
-            f"| Plans Created     | {counts.get('Plans', 0):>5} |\n"
-            f"| Pending Approval  | {counts.get('Pending_Approval', 0):>5} |\n"
-            f"| Approved          | {counts.get('Approved', 0):>5} |\n"
-            f"| Rejected          | {counts.get('Rejected', 0):>5} |\n"
-            f"| Completed (Done)  | {counts.get('Done', 0):>5} |\n\n"
-            f"**Total Activity Today:** {total_activity} item(s)\n\n"
+            f"_Generated at {gen_time} by AI Employee_\n\n"
+            "---\n\n"
+            "## Today's Activity\n\n"
+            "**New / Modified Items Today:**\n\n"
+            f"| Folder            | Today | Total |\n"
+            f"|-------------------|-------|-------|\n"
+            f"| Inbox             | {today_counts.get('Inbox', 0):>5} | {total_counts.get('Inbox', 0):>5} |\n"
+            f"| Needs Action      | {today_counts.get('Needs_Action', 0):>5} | {total_counts.get('Needs_Action', 0):>5} |\n"
+            f"| Plans             | {today_counts.get('Plans', 0):>5} | {total_counts.get('Plans', 0):>5} |\n"
+            f"| Pending Approval  | {today_counts.get('Pending_Approval', 0):>5} | {total_counts.get('Pending_Approval', 0):>5} |\n"
+            f"| Approved          | {today_counts.get('Approved', 0):>5} | {total_counts.get('Approved', 0):>5} |\n"
+            f"| Rejected          | {today_counts.get('Rejected', 0):>5} | {total_counts.get('Rejected', 0):>5} |\n"
+            f"| Completed (Done)  | {today_counts.get('Done', 0):>5} | {total_counts.get('Done', 0):>5} |\n\n"
+            f"**Items modified today:** {total_today}  |  **Total vault items:** {total_overall}\n\n"
+            "---\n\n"
+            "## Watcher Metrics (Cumulative)\n\n"
+            f"| Watcher           | Events Processed |\n"
+            f"|-------------------|------------------|\n"
+            f"| Gmail Monitor     | {emails_checked} emails |\n"
+            f"| File Monitor      | {files_monitored} files |\n"
+            f"| LinkedIn Monitor  | {linkedin_checked} notifications |\n"
+            f"| WhatsApp Monitor  | {whatsapp_checked} messages |\n\n"
+            "---\n\n"
+            "## Pending Approvals\n\n"
+            f"{pending_block}\n\n"
+            "---\n\n"
+            "## Active Plans\n\n"
+            f"{plans_block}\n\n"
+            "---\n\n"
+            "## Needs Action (Top Items)\n\n"
+            f"{needs_block}\n\n"
+            "---\n\n"
             "## Next Steps\n\n"
-            "- Review `Needs_Action/` for pending tasks\n"
-            "- Check `Pending_Approval/` for items awaiting decision\n"
-            "- Follow up on any rejected actions in `Rejected/`\n\n"
-            "---\n"
-            f"*Generated automatically by AI Employee at {generated_ts}*\n"
+            "- [ ] Review `Needs_Action/` for pending tasks\n"
+            "- [ ] Check `Pending_Approval/` for items awaiting decision\n"
+            "- [ ] Follow up on any rejected actions in `Rejected/`\n"
+            "- [ ] Update active plans with progress notes\n\n"
+            "---\n\n"
+            f"_Auto-generated by AI Employee Scheduler at {generated_ts}_\n"
         )
 
         # ── Write report file ─────────────────────────────────────────────────
@@ -193,30 +288,32 @@ def generate_daily_summary(vault_path: str) -> dict | None:
         reports_dir.mkdir(parents=True, exist_ok=True)
 
         report_path = reports_dir / f"DAILY_SUMMARY_{date_slug}.md"
-
-        # Overwrite if already exists (re-generated later in the day)
         report_path.write_text(content, encoding="utf-8")
 
         # ── Dashboard activity entry ──────────────────────────────────────────
         try:
             update_activity(
                 vault,
-                f"Daily summary generated: {total_activity} item(s) today — "
-                f"{report_path.name}",
+                f"Daily summary generated: {total_today} new item(s) today, "
+                f"{total_overall} total vault items — {report_path.name}",
             )
         except Exception as dash_exc:
             logger.warning(f"Dashboard update failed: {dash_exc}")
 
         logger.info(f"Daily summary written: {report_path}")
-        logger.info(f"Task: generate_daily_summary — done  (total activity: {total_activity})")
+        logger.info(
+            f"Task: generate_daily_summary — done  "
+            f"(today: {total_today}, total vault: {total_overall})"
+        )
 
-        summary = {
+        return {
             "date":           today.isoformat(),
             "report_file":    str(report_path),
-            "counts":         counts,
-            "total_activity": total_activity,
+            "counts":         today_counts,
+            "total_counts":   total_counts,
+            "total_activity": total_today,
+            "total_vault":    total_overall,
         }
-        return summary
 
     except Exception as exc:
         logger.error(f"Task: generate_daily_summary — FAILED: {exc}", exc_info=True)
