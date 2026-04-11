@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Inbox/EMAIL_20260411_164708_19d7d70e562b502d.md",
+                "file": "Needs_Action/EMAIL_20260411_171946_19d7d8ec47f208ab.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "EMAIL_20260411_164708_19d7d70e562b502d"
+              "title": "EMAIL_20260411_171946_19d7d8ec47f208ab"
             }
           }
         ]
@@ -185,9 +185,17 @@
   },
   "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
-    "Inbox/EMAIL_20260411_070449_19d7b5bba542374d.md",
-    "Inbox/EMAIL_20260411_164708_19d7d70e562b502d.md",
     "Dashboard.md",
+    "Needs_Action/EMAIL_20260411_171946_19d7d8ec47f208ab.md",
+    "Inbox/EMAIL_20260411_171659_19d7d8c388b225f6.md",
+    "Inbox/EMAIL_20260411_171626_19d7d8bb23a6d201.md",
+    "Inbox/EMAIL_20260407_172521_19d68fa621d06f20.md",
+    "Inbox/EMAIL_20260411_164708_19d7d70e562b502d.md",
+    "Inbox/EMAIL_20250411_160000_test_norm_002.md",
+    "Inbox/EMAIL_20250411_160000_test_norm_001.md",
+    "Needs_Action/EMAIL_20250411_160000_test_high_002.md",
+    "Needs_Action/EMAIL_20250411_160000_test_high_001.md",
+    "Inbox/EMAIL_20260411_070449_19d7b5bba542374d.md",
     "Approved/EMAIL_20260407_165611_19d68dfb7be814fc.md",
     "Inbox/EMAIL_20260407_165611_19d68dfb7be814fc.md",
     "Done/FILE_20260411_115225_test_invoice_urgent3txt.md",
@@ -203,14 +211,6 @@
     "Needs_Action/FILE_20260411_999999_stale_urgent_test.md",
     "Needs_Action/FILE_20260411_121050_test_invoice_urgent5txt.md",
     "Needs_Action/FILE_20260411_120348_test_URGENT_invoice_newtxt.md",
-    "Approved/FILE_sweep_test_approved.md",
-    "Rejected/FILE_sweep_test_rejected.md",
-    "Done/FILE_sweep_test_done.md",
-    "Inbox/EMAIL_20260409_051015_19d70a61a6e791d4.md",
-    "Needs_Action/FILE_20260411_070046_test_invoice_urgenttxt.md",
-    "Done/EMAIL_20260407_073652_19d66df99728e748.md",
-    "Done/FILE_sweep_test.md",
-    "Inbox/FILE_20260411_999999_stale_urgent_test.md",
     "Archive/Rejected",
     "Archive/Done",
     "Archive",
