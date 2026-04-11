@@ -40,15 +40,16 @@ DEFAULT_SESSION_DIR = (
     / "Desktop/Hackathon/Hackathon0Full/ai-employee-project/.credentials/linkedin_session"
 )
 
-SESSION_FILE_NAME = "context.json"
+SESSION_FILE_NAME  = "context.json"
+SEEN_IDS_FILE_NAME = "linkedin_seen_ids.json"
 
 LINKEDIN_BASE      = "https://www.linkedin.com"
-MESSAGING_URL      = f"{LINKEDIN_BASE}/messaging/"
+MESSAGING_URL      = f"{LINKEDIN_BASE}/messaging/"   # plain URL; unread filtered by element class
 NOTIFICATIONS_URL  = f"{LINKEDIN_BASE}/notifications/"
 
 # Page timeouts (ms)
-NAV_TIMEOUT     = 60_000   # 60 seconds — increased from 30s for slow page loads
-ELEMENT_TIMEOUT = 10_000
+NAV_TIMEOUT     = 60_000   # 60 seconds for full page navigation
+ELEMENT_TIMEOUT = 30_000   # 30 seconds — LinkedIn SPA injects content well after load
 
 # Rate-limit back-off (seconds)
 RATE_LIMIT_BACKOFF = 300
@@ -76,8 +77,29 @@ class LinkedInWatcher(BaseWatcher):
         super().__init__(vault_path, check_interval)
         self.session_dir = Path(session_dir) if session_dir else DEFAULT_SESSION_DIR
         self.session_dir.mkdir(parents=True, exist_ok=True)
-        self._context_file = self.session_dir / SESSION_FILE_NAME
-        self._seen_ids: set[str] = set()
+        self._context_file  = self.session_dir / SESSION_FILE_NAME
+        self._seen_ids_file = self.session_dir / SEEN_IDS_FILE_NAME
+        self._seen_ids: set[str] = self._load_seen_ids()
+
+    # ── Seen-ID persistence ───────────────────────────────────────────────────
+
+    def _load_seen_ids(self) -> set[str]:
+        """Load previously seen notification IDs from disk."""
+        if self._seen_ids_file.exists():
+            try:
+                return set(json.loads(self._seen_ids_file.read_text(encoding="utf-8")))
+            except Exception as e:
+                self.logger.warning("Could not load seen_ids file: %s", e)
+        return set()
+
+    def _save_seen_ids(self) -> None:
+        """Persist current seen IDs to disk so restarts don't re-process old items."""
+        try:
+            self._seen_ids_file.write_text(
+                json.dumps(list(self._seen_ids), indent=2), encoding="utf-8"
+            )
+        except Exception as e:
+            self.logger.warning("Could not save seen_ids file: %s", e)
 
     # ── Session management ────────────────────────────────────────────────────
 
@@ -188,31 +210,71 @@ class LinkedInWatcher(BaseWatcher):
 
     def _check_messages(self, page) -> list[dict]:
         """
-        Navigate to linkedin.com/messaging and extract new message threads.
-        Returns a list of notification dicts (type='message').
+        Navigate to linkedin.com/messaging/ and extract unread threads.
+
+        Navigation strategy:
+          1. goto with wait_until="commit" — fires on first byte, never times out on SPA
+          2. Explicit domcontentloaded + networkidle waits in try/except (non-fatal)
+          3. wait_for_selector is best-effort — timeout logs a warning, does NOT abort
+          4. Unread threads identified by element-class check, not URL filter
         """
+        # ── Navigate ──────────────────────────────────────────────────────────
         try:
-            page.goto(MESSAGING_URL, timeout=NAV_TIMEOUT)
+            page.goto(MESSAGING_URL, wait_until="commit", timeout=NAV_TIMEOUT)
+        except Exception as exc:
+            self.logger.warning("Messaging navigation failed: %s", exc)
+            return []
+
+        # Non-fatal progressive load waits
+        for state, ms in (("domcontentloaded", 20_000), ("networkidle", 15_000)):
+            try:
+                page.wait_for_load_state(state, timeout=ms)
+            except Exception:
+                pass
+
+        # ── Wait for conversation list (best-effort) ──────────────────────────
+        try:
             page.wait_for_selector(
                 "ul.msg-conversations-container__conversations-list, "
-                ".msg-conversation-listitem, "
+                "li[class*='conversations-list-item'], "
+                "div[class*='msg-conversation'], "
                 ".scaffold-layout__list",
                 timeout=ELEMENT_TIMEOUT,
             )
-        except Exception as exc:
-            self.logger.warning("Messaging page failed to load: %s", exc)
-            return []
+        except Exception:
+            self.logger.warning(
+                "Messaging: selector wait timed out — scraping anyway "
+                "(title=%s url=%s)", page.title(), page.url
+            )
 
-        items = []
+        page.wait_for_timeout(2000)  # final JS-render settle
 
-        # Each conversation thread is a list-item
-        threads = page.query_selector_all(
-            ".msg-conversation-listitem, "
-            "li.msg-conversations-container__conversations-list-item"
+        # ── Scrape conversation rows ──────────────────────────────────────────
+        threads = (
+            page.query_selector_all("li.msg-conversations-container__conversations-list-item")
+            or page.query_selector_all("li[class*='conversations-list-item']")
+            or page.query_selector_all("div[class*='msg-conversation-card']")
+            or page.query_selector_all(".msg-conversation-listitem")
+        )
+        self.logger.info(
+            "Messaging: %d thread row(s) found (title=%s)", len(threads), page.title()
         )
 
+        items = []
         for thread in threads:
             try:
+                # Only process threads with an unread indicator
+                is_unread = bool(
+                    thread.query_selector(
+                        ".msg-conversation-card__unread-count, "
+                        "[class*='unread-count'], "
+                        "[class*='--unread'], "
+                        ".notification-badge"
+                    )
+                )
+                if not is_unread:
+                    continue
+
                 data = self._extract_notification_data(thread, page, default_type="message")
                 if data and data["id"] not in self._seen_ids:
                     items.append(data)
@@ -227,10 +289,21 @@ class LinkedInWatcher(BaseWatcher):
         """
         Navigate to linkedin.com/notifications and extract relevant items.
         Filters out promotional, job-alert, and system noise.
-        Returns a list of notification dicts.
+        wait_for_selector is best-effort only — timeout does NOT abort scraping.
         """
         try:
-            page.goto(NOTIFICATIONS_URL, timeout=NAV_TIMEOUT)
+            page.goto(NOTIFICATIONS_URL, wait_until="commit", timeout=NAV_TIMEOUT)
+        except Exception as exc:
+            self.logger.warning("Notifications navigation failed: %s", exc)
+            return []
+
+        for state, ms in (("domcontentloaded", 20_000), ("networkidle", 15_000)):
+            try:
+                page.wait_for_load_state(state, timeout=ms)
+            except Exception:
+                pass
+
+        try:
             page.wait_for_selector(
                 "div.nt-card-list, "
                 "div.notification-item, "
@@ -238,9 +311,13 @@ class LinkedInWatcher(BaseWatcher):
                 "article",
                 timeout=ELEMENT_TIMEOUT,
             )
-        except Exception as exc:
-            self.logger.warning("Notifications page failed to load: %s", exc)
-            return []
+        except Exception:
+            self.logger.warning(
+                "Notifications: selector wait timed out — scraping anyway "
+                "(title=%s url=%s)", page.title(), page.url
+            )
+
+        page.wait_for_timeout(2000)
 
         items = []
 
@@ -283,6 +360,7 @@ class LinkedInWatcher(BaseWatcher):
         # ── Unique ID ─────────────────────────────────────────────────────────
         uid = (
             element.get_attribute("data-urn")
+            or element.get_attribute("data-entity-urn")       # current LinkedIn DOM
             or element.get_attribute("data-notification-id")
             or element.get_attribute("data-conversation-id")
             or element.get_attribute("id")
@@ -375,7 +453,15 @@ class LinkedInWatcher(BaseWatcher):
             pw, browser, context, page = self._launch_browser(headless=True)
 
             # Verify session is still valid
-            page.goto(LINKEDIN_BASE, timeout=NAV_TIMEOUT)
+            page.goto(LINKEDIN_BASE, wait_until="commit", timeout=NAV_TIMEOUT)
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=20_000)
+            except Exception:
+                pass
+            try:
+                page.wait_for_load_state("networkidle", timeout=10_000)
+            except Exception:
+                pass
 
             if not self._is_logged_in(page):
                 self.logger.error(
@@ -412,6 +498,8 @@ class LinkedInWatcher(BaseWatcher):
 
             # Refresh saved session so it stays alive
             self._save_session(context)
+            # Persist seen IDs so restarts don't re-process old items
+            self._save_seen_ids()
             return unique_items
 
         except Exception as exc:
