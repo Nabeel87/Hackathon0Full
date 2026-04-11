@@ -1,3 +1,4 @@
+import logging
 import re
 import sys
 from datetime import datetime, timezone
@@ -72,6 +73,10 @@ class FileWatcher(BaseWatcher):
         if not self.watch_dir.exists():
             self.logger.warning(f"Watch directory not found: {self.watch_dir}")
             return []
+
+        # Run maintenance every poll cycle regardless of new files
+        _fix_misrouted_cards(self.vault_path)
+        _sweep_done_folder(self.vault_path)
 
         items = []
         for path in sorted(self.watch_dir.iterdir()):
@@ -221,6 +226,72 @@ def _infer_priority(name: str, suffix: str) -> str:
     if _HIGH_PRIORITY_KEYWORDS.search(name):
         return "high"
     return "normal"
+
+
+def _fix_misrouted_cards(vault_path: Path) -> int:
+    """
+    Scan Inbox/ and Needs_Action/ for FILE_*.md cards in the wrong folder
+    and move them to the correct one based on their priority frontmatter field.
+
+      priority: high   found in Inbox/        → move to Needs_Action/
+      priority: normal found in Needs_Action/ → move to Inbox/
+
+    Returns the number of cards moved.
+    """
+    checks = [
+        (vault_path / "Inbox",        "high",   vault_path / "Needs_Action"),
+        (vault_path / "Needs_Action", "normal", vault_path / "Inbox"),
+    ]
+    logger = logging.getLogger("FileWatcher")
+    moved = 0
+
+    for src_dir, wrong_priority, dest_dir in checks:
+        if not src_dir.exists():
+            continue
+        for card in list(src_dir.glob("FILE_*.md")):
+            text = card.read_text(encoding="utf-8")
+            if f"priority: {wrong_priority}" not in text:
+                continue
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / card.name
+            # Patch routed_to field and body line if present
+            updated = re.sub(r'routed_to: "[^"]*"', f'routed_to: "{dest_dir.name}"', text)
+            updated = re.sub(
+                r'\*\*Routed To:\*\* \S+/',
+                f'**Routed To:** {dest_dir.name}/',
+                updated,
+            )
+            dest.write_text(updated, encoding="utf-8")
+            card.unlink()
+            moved += 1
+            logger.info(
+                f"[fix-routing] {card.name}: {src_dir.name}/ -> {dest_dir.name}/"
+            )
+
+    return moved
+
+
+def _sweep_done_folder(vault_path: Path) -> int:
+    """
+    Update status: pending → status: done for any card inside Done/.
+    Handles files manually moved by the user from Inbox/ or Needs_Action/.
+    Returns the number of cards updated.
+    """
+    done_dir = vault_path / "Done"
+    if not done_dir.exists():
+        return 0
+    logger = logging.getLogger("FileWatcher")
+    updated = 0
+    for card in done_dir.glob("*.md"):
+        text = card.read_text(encoding="utf-8")
+        if "status: pending" in text:
+            card.write_text(
+                text.replace("status: pending", "status: done", 1),
+                encoding="utf-8",
+            )
+            updated += 1
+            logger.info(f"[sweep-done] {card.name}: status pending → done")
+    return updated
 
 
 def _suggested_actions(suffix: str) -> str:
