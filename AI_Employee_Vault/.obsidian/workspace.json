@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Dashboard.md",
+                "file": "Approved/EMAIL_DRAFT_20260411_183720.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Dashboard"
+              "title": "EMAIL_DRAFT_20260411_183720"
             }
           }
         ]
@@ -183,10 +183,11 @@
       "bases:Create new base": false
     }
   },
-  "active": "132e4172d1ae6d09",
+  "active": "13b2eb857fda68ee",
   "lastOpenFiles": [
-    "Inbox/EMAIL_20260411_172434_19d7d932d1589941.md",
     "Dashboard.md",
+    "Approved/EMAIL_DRAFT_20260411_183720.md",
+    "Inbox/EMAIL_20260411_172434_19d7d932d1589941.md",
     "Needs_Action/EMAIL_20260411_171946_19d7d8ec47f208ab.md",
     "Inbox/EMAIL_20260411_171659_19d7d8c388b225f6.md",
     "Inbox/EMAIL_20260411_171626_19d7d8bb23a6d201.md",
@@ -210,7 +211,6 @@
     "Rejected/EMAIL_20260409_051015_19d70a61a6e791d4.md",
     "Plans/PLAN_20260409_181921_migrate_gmail_watcher_database_to_postgr.md",
     "Needs_Action/FILE_20260411_999999_stale_urgent_test.md",
-    "Needs_Action/FILE_20260411_121050_test_invoice_urgent5txt.md",
     "Archive/Rejected",
     "Archive/Done",
     "Archive",
