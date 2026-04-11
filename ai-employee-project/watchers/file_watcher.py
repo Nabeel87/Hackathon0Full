@@ -273,25 +273,41 @@ def _fix_misrouted_cards(vault_path: Path) -> int:
 
 def _sweep_done_folder(vault_path: Path) -> int:
     """
-    Update status: pending → status: done for any card inside Done/.
-    Handles files manually moved by the user from Inbox/ or Needs_Action/.
-    Returns the number of cards updated.
+    Sweep all outcome folders and patch status: pending to the correct value
+    based on which folder the card now lives in.
+
+      Done/     -> status: done
+      Rejected/ -> status: rejected
+      Approved/ -> status: approved
+
+    Handles cards manually moved by the user from Inbox/ or Needs_Action/.
+    Returns the total number of cards updated.
     """
-    done_dir = vault_path / "Done"
-    if not done_dir.exists():
-        return 0
+    outcome_folders = {
+        "Done":     "done",
+        "Rejected": "rejected",
+        "Approved": "approved",
+    }
     logger = logging.getLogger("FileWatcher")
-    updated = 0
-    for card in done_dir.glob("*.md"):
-        text = card.read_text(encoding="utf-8")
-        if "status: pending" in text:
-            card.write_text(
-                text.replace("status: pending", "status: done", 1),
-                encoding="utf-8",
-            )
-            updated += 1
-            logger.info(f"[sweep-done] {card.name}: status pending → done")
-    return updated
+    total = 0
+
+    for folder_name, new_status in outcome_folders.items():
+        folder = vault_path / folder_name
+        if not folder.exists():
+            continue
+        for card in folder.glob("*.md"):
+            text = card.read_text(encoding="utf-8")
+            if "status: pending" in text:
+                card.write_text(
+                    text.replace("status: pending", f"status: {new_status}", 1),
+                    encoding="utf-8",
+                )
+                total += 1
+                logger.info(
+                    f"[sweep] {card.name}: status pending -> {new_status} ({folder_name}/)"
+                )
+
+    return total
 
 
 def _suggested_actions(suffix: str) -> str:
