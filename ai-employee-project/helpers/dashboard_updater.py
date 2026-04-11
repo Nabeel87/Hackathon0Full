@@ -5,6 +5,12 @@ Utilities for updating AI_Employee_Vault/Dashboard.md.
 
 Functions
 ---------
+get_folder_counts(vault_path)
+    Scan all 7 vault folders and return accurate counts by folder and type.
+
+update_dashboard(vault_path, activity_message, source)
+    Full dashboard refresh: update activity log + all Quick Stats from real counts.
+
 update_activity(vault_path, message)
     Prepend a timestamped entry to ## Recent Activity (cap at 20).
 
@@ -16,7 +22,10 @@ update_component_status(vault_path, component, status, notes='')
     Update a row in the ## System Status table.
 
 refresh_vault_counts(vault_path)
-    Recount Inbox/, Needs_Action/, Done/ and sync all task stats.
+    Recount all 7 vault folders and sync all stats (files, emails, tasks, plans, etc.).
+
+test_dashboard_update()
+    Print current vault counts and trigger a full dashboard refresh.
 
 CLI
 ---
@@ -25,6 +34,7 @@ python helpers/dashboard_updater.py --stat files_monitored --value 5
 python helpers/dashboard_updater.py --stat tasks_in_inbox --value 1 --operation increment
 python helpers/dashboard_updater.py --component "File Monitor" --status running
 python helpers/dashboard_updater.py --refresh-counts
+python helpers/dashboard_updater.py --update-dashboard --activity "Manual refresh"
 """
 
 import argparse
@@ -45,6 +55,7 @@ STAT_LABELS: dict[str, str] = {
     "tasks_in_needs_action": "Tasks in Needs_Action",
     "tasks_completed":       "Tasks completed",
     "linkedin_checked":      "LinkedIn checked",
+    "whatsapp_checked":      "WhatsApp checked",
     "plans_created":         "Plans created",
     "pending_approvals":     "Pending approvals",
     "actions_approved":      "Actions approved",
@@ -53,11 +64,14 @@ STAT_LABELS: dict[str, str] = {
 
 # Maps the public component key → exact text in the System Status table
 COMPONENT_NAMES: dict[str, str] = {
-    "file monitor":       "File Monitor",
-    "gmail monitor":      "Gmail Monitor",
-    "dashboard updater":  "Dashboard Updater",
-    "inbox processor":    "Inbox Processor",
-    "approval checker":   "Approval Checker",
+    "file monitor":          "File Monitor",
+    "gmail monitor":         "Gmail Monitor",
+    "dashboard updater":     "Dashboard Updater",
+    "inbox processor":       "Inbox Processor",
+    "approval checker":      "Approval Checker",
+    "linkedin monitor skill": "LinkedIn Monitor Skill",
+    "email mcp server":      "Email MCP Server",
+    "whatsapp monitor":      "WhatsApp Monitor",
 }
 
 # Maps CLI/code status name → display string written into the table
@@ -277,29 +291,187 @@ def update_component_status(
     print(f"[dashboard-updater] Status updated: {resolved} -> {status_text} at {now}")
 
 
+def get_folder_counts(vault_path: str | Path) -> dict[str, int]:
+    """
+    Scan all 7 vault folders and return accurate counts.
+
+    Returns a dict with keys:
+        inbox, needs_action, done, plans, pending_approval, approved, rejected
+        total_files, total_emails, total_linkedin, total_whatsapp
+    """
+    vault = Path(vault_path)
+
+    counts: dict[str, int] = {
+        "inbox":            0,
+        "needs_action":     0,
+        "done":             0,
+        "plans":            0,
+        "pending_approval": 0,
+        "approved":         0,
+        "rejected":         0,
+        "total_files":      0,
+        "total_emails":     0,
+        "total_linkedin":   0,
+        "total_whatsapp":   0,
+    }
+
+    # Folder name → counts key
+    folders: dict[str, str] = {
+        "Inbox":            "inbox",
+        "Needs_Action":     "needs_action",
+        "Done":             "done",
+        "Plans":            "plans",
+        "Pending_Approval": "pending_approval",
+        "Approved":         "approved",
+        "Rejected":         "rejected",
+    }
+
+    _excluded = {"Dashboard.md", "Company_Handbook.md"}
+
+    for folder_name, key in folders.items():
+        folder_path = vault / folder_name
+        if folder_path.exists():
+            md_files = [
+                f for f in folder_path.glob("*.md")
+                if f.name not in _excluded
+            ]
+            counts[key] = len(md_files)
+
+    # Count by prefix type across ALL 7 folders
+    for folder_name in folders:
+        folder_path = vault / folder_name
+        if folder_path.exists():
+            counts["total_files"]     += len(list(folder_path.glob("FILE_*.md")))
+            counts["total_emails"]    += len(list(folder_path.glob("EMAIL_*.md")))
+            counts["total_linkedin"]  += len(list(folder_path.glob("LINKEDIN_*.md")))
+            counts["total_whatsapp"]  += len(list(folder_path.glob("WHATSAPP_*.md")))
+
+    return counts
+
+
+def update_dashboard(
+    vault_path: str | Path,
+    activity_message: str,
+    source: str = "system",
+) -> None:
+    """
+    Full dashboard refresh in one call:
+      1. Log an activity entry.
+      2. Recount all vault folders.
+      3. Push every Quick Stats row with real counts.
+    """
+    vault_path = Path(vault_path)
+    counts = get_folder_counts(vault_path)
+
+    # 1 — activity log
+    entry = f"[{source}] {activity_message}"
+    update_activity(vault_path, entry)
+
+    # 2 — per-folder task counts
+    update_stats(vault_path, "tasks_in_inbox",        counts["inbox"],            "set")
+    update_stats(vault_path, "tasks_in_needs_action", counts["needs_action"],     "set")
+    update_stats(vault_path, "tasks_completed",       counts["done"],             "set")
+    update_stats(vault_path, "plans_created",         counts["plans"],            "set")
+    update_stats(vault_path, "pending_approvals",     counts["pending_approval"], "set")
+    update_stats(vault_path, "actions_approved",      counts["approved"],         "set")
+    update_stats(vault_path, "actions_rejected",      counts["rejected"],         "set")
+
+    # 3 — cross-folder type counts
+    update_stats(vault_path, "files_monitored",  counts["total_files"],    "set")
+    update_stats(vault_path, "emails_checked",   counts["total_emails"],   "set")
+    update_stats(vault_path, "linkedin_checked", counts["total_linkedin"], "set")
+    update_stats(vault_path, "whatsapp_checked", counts["total_whatsapp"], "set")
+
+    # 4 — mark Dashboard Updater itself as ONLINE
+    update_component_status(vault_path, "dashboard updater", "running", "OK")
+
+    print(
+        f"[dashboard-updater] Full dashboard updated from real vault counts: "
+        f"inbox={counts['inbox']}, needs_action={counts['needs_action']}, "
+        f"done={counts['done']}, plans={counts['plans']}, "
+        f"pending={counts['pending_approval']}, approved={counts['approved']}, "
+        f"rejected={counts['rejected']}, "
+        f"files={counts['total_files']}, emails={counts['total_emails']}, "
+        f"linkedin={counts['total_linkedin']}, whatsapp={counts['total_whatsapp']}"
+    )
+
+
 def refresh_vault_counts(vault_path: str | Path) -> None:
     """
-    Recount .md files in Inbox/, Needs_Action/, Done/ and sync stats.
+    Recount all 7 vault folders (and by-type totals) and sync every Quick Stats row.
     Use after any bulk vault operation.
     """
     vault_path = Path(vault_path)
+    counts = get_folder_counts(vault_path)
 
-    def count(folder: str) -> int:
-        d = vault_path / folder
-        return sum(1 for f in d.iterdir() if f.is_file() and f.suffix == ".md") if d.exists() else 0
-
-    inbox_count        = count("Inbox")
-    needs_action_count = count("Needs_Action")
-    done_count         = count("Done")
-
-    update_stats(vault_path, "tasks_in_inbox",        inbox_count,        "set")
-    update_stats(vault_path, "tasks_in_needs_action", needs_action_count, "set")
-    update_stats(vault_path, "tasks_completed",       done_count,         "set")
+    update_stats(vault_path, "tasks_in_inbox",        counts["inbox"],            "set")
+    update_stats(vault_path, "tasks_in_needs_action", counts["needs_action"],     "set")
+    update_stats(vault_path, "tasks_completed",       counts["done"],             "set")
+    update_stats(vault_path, "plans_created",         counts["plans"],            "set")
+    update_stats(vault_path, "pending_approvals",     counts["pending_approval"], "set")
+    update_stats(vault_path, "actions_approved",      counts["approved"],         "set")
+    update_stats(vault_path, "actions_rejected",      counts["rejected"],         "set")
+    update_stats(vault_path, "files_monitored",       counts["total_files"],      "set")
+    update_stats(vault_path, "emails_checked",        counts["total_emails"],     "set")
+    update_stats(vault_path, "linkedin_checked",      counts["total_linkedin"],   "set")
+    update_stats(vault_path, "whatsapp_checked",      counts["total_whatsapp"],   "set")
 
     print(
-        f"[dashboard-updater] Vault counts synced: "
-        f"inbox={inbox_count}, needs_action={needs_action_count}, done={done_count}"
+        f"[dashboard-updater] Vault counts synced — "
+        f"inbox={counts['inbox']}, needs_action={counts['needs_action']}, "
+        f"done={counts['done']}, plans={counts['plans']}, "
+        f"pending={counts['pending_approval']}, approved={counts['approved']}, "
+        f"rejected={counts['rejected']}, "
+        f"files={counts['total_files']}, emails={counts['total_emails']}, "
+        f"linkedin={counts['total_linkedin']}, whatsapp={counts['total_whatsapp']}"
     )
+
+
+def init_component_statuses(vault_path: str | Path) -> None:
+    """
+    Set correct statuses for every component in the System Status table.
+
+    Continuous monitors (File Monitor, Gmail Monitor) are left untouched —
+    they self-report via their own watchers.
+
+    On-demand components get READY; Dashboard Updater gets ONLINE because
+    calling this function proves it is running.
+    """
+    vault_path = Path(vault_path)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    update_component_status(vault_path, "dashboard updater",      "running", "OK")
+    update_component_status(vault_path, "inbox processor",        "ready",   "On-demand")
+    update_component_status(vault_path, "linkedin monitor skill", "ready",   "On-demand")
+    update_component_status(vault_path, "email mcp server",       "ready",   "On-demand")
+    update_component_status(vault_path, "whatsapp monitor",       "ready",   "On-demand")
+
+    print(f"[dashboard-updater] All component statuses initialised at {now}")
+
+
+def test_dashboard_update() -> None:
+    """Test dashboard update with real vault counts (prints report and refreshes)."""
+    vault_path = Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")
+
+    print("Scanning vault folders...")
+    counts = get_folder_counts(str(vault_path))
+
+    print("\nCurrent Counts:")
+    print(f"  Inbox:            {counts['inbox']}")
+    print(f"  Needs_Action:     {counts['needs_action']}")
+    print(f"  Done:             {counts['done']}")
+    print(f"  Plans:            {counts['plans']}")
+    print(f"  Pending_Approval: {counts['pending_approval']}")
+    print(f"  Approved:         {counts['approved']}")
+    print(f"  Rejected:         {counts['rejected']}")
+    print(f"\nBy Type:")
+    print(f"  Total Files:    {counts['total_files']}")
+    print(f"  Total Emails:   {counts['total_emails']}")
+    print(f"  Total LinkedIn: {counts['total_linkedin']}")
+    print(f"  Total WhatsApp: {counts['total_whatsapp']}")
+
+    update_dashboard(str(vault_path), "Manual dashboard refresh", "system")
+    print("\n[OK] Dashboard updated!")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -325,7 +497,13 @@ def _build_parser() -> argparse.ArgumentParser:
     group.add_argument("--component", metavar="COMPONENT",
                        help='Component to update, e.g. "File Monitor"')
     group.add_argument("--refresh-counts", action="store_true",
-                       help="Recount vault folders and sync all task stats")
+                       help="Recount all 7 vault folders and sync every stat row")
+    group.add_argument("--update-dashboard", action="store_true",
+                       help="Full refresh: log activity + recount all vault folders")
+    group.add_argument("--test", action="store_true",
+                       help="Run test_dashboard_update() — print counts and refresh")
+    group.add_argument("--init-status", action="store_true",
+                       help="Set correct status for all System Status components")
 
     parser.add_argument("--value", type=int, default=0,
                         help="Value for --stat (default: 0)")
@@ -356,6 +534,16 @@ def main() -> None:
 
         elif args.refresh_counts:
             refresh_vault_counts(vault)
+
+        elif args.update_dashboard:
+            msg = args.notes if args.notes else "Manual dashboard refresh"
+            update_dashboard(vault, msg, "cli")
+
+        elif args.test:
+            test_dashboard_update()
+
+        elif args.init_status:
+            init_component_statuses(vault)
 
     except FileNotFoundError as e:
         print(f"[dashboard-updater] ERROR: {e}", file=sys.stderr)
