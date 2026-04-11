@@ -30,7 +30,15 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.send",
 ]
 
-KEYWORDS = ["urgent", "asap", "invoice", "payment"]
+# Detection keywords — drives the Gmail API query (fetches any matching email)
+KEYWORDS = [
+    "urgent", "asap", "deadline", "critical", "emergency", "action required",
+    "invoice", "payment", "meeting", "important",
+]
+
+# Routing keywords — subset used to decide which folder a fetched email lands in
+_HIGH_PRIORITY_KW = ["urgent", "asap", "deadline", "critical", "emergency", "action required"]
+_NORMAL_PRIORITY_KW = ["invoice", "payment", "meeting", "important"]
 
 DEFAULT_CREDENTIALS_DIR = (
     Path.home()
@@ -177,28 +185,43 @@ class GmailWatcher(BaseWatcher):
             self.logger.warning(f"Dashboard update failed: {e}")
 
     def create_action_file(self, item: dict) -> Path:
-        """Write an EMAIL_*.md card to vault Inbox/ and return its path."""
-        vault_inbox = self.vault_path / "Inbox"
-        vault_inbox.mkdir(parents=True, exist_ok=True)
+        """
+        Write an EMAIL_*.md card to the vault and return its path.
 
+        Routing:
+          priority == 'high'   → Needs_Action/
+          priority == 'normal' → Inbox/
+        """
         received_iso, ts_slug = _parse_date(item["internal_date_ms"])
         priority = _infer_priority(item["subject"], item["snippet"])
-        actions = _suggested_actions(item["subject"], item["snippet"])
+        actions  = _suggested_actions(item["subject"], item["snippet"])
+
+        # Determine target folder based on priority
+        if priority == "high":
+            target_folder = self.vault_path / "Needs_Action"
+        else:
+            target_folder = self.vault_path / "Inbox"
+
+        # Ensure folder exists
+        target_folder.mkdir(parents=True, exist_ok=True)
 
         # Full message ID in filename for reliable deduplication
         card_name = f"EMAIL_{ts_slug}_{item['id']}.md"
-        card_path = vault_inbox / card_name
+
+        # Create file in appropriate folder
+        action_file = target_folder / card_name
 
         def yml(v: str) -> str:
             return v.replace('"', '\\"')
 
-        card_path.write_text(
+        action_file.write_text(
             f"""---
 type: email
 from: "{yml(item['sender'])}"
 subject: "{yml(item['subject'])}"
 received: "{received_iso}"
 priority: {priority}
+routed_to: "{target_folder.name}"
 status: pending
 message_id: "{item['id']}"
 ---
@@ -208,6 +231,7 @@ message_id: "{item['id']}"
 **From:** {item['sender']}
 **Received:** {received_iso}
 **Priority:** {priority}
+**Routed To:** {target_folder.name}/
 
 ---
 
@@ -231,7 +255,10 @@ _Add context here as you process this email._
         )
 
         self._seen_ids.add(item["id"])
-        return card_path
+        self.logger.info(
+            f"Created {card_name} in {target_folder.name}/ (priority: {priority})"
+        )
+        return action_file
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -244,12 +271,11 @@ def _build_query() -> str:
 
 def _already_logged(message_id: str, vault_path: Path) -> bool:
     """Return True if a vault card for this exact message ID exists in any vault folder."""
-    for folder in ("Inbox", "Needs_Action", "Done"):
+    for folder in ("Inbox", "Needs_Action", "Done", "Approved", "Rejected"):
         d = vault_path / folder
         if d.exists() and any(message_id in f.name for f in d.iterdir() if f.suffix == ".md"):
             return True
     return False
-    return any(message_id in f.name for f in inbox.iterdir() if f.suffix == ".md")
 
 
 def _parse_date(internal_date_ms: str) -> tuple[str, str]:
@@ -260,7 +286,7 @@ def _parse_date(internal_date_ms: str) -> tuple[str, str]:
 
 def _infer_priority(subject: str, snippet: str) -> str:
     combined = (subject + " " + snippet).lower()
-    if any(kw in combined for kw in ["urgent", "asap"]):
+    if any(kw in combined for kw in _HIGH_PRIORITY_KW):
         return "high"
     return "normal"
 
