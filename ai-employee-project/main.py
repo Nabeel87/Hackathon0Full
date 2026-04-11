@@ -1,17 +1,27 @@
 """
 main.py — AI Employee master orchestrator.
 
-Runs FileWatcher, GmailWatcher, and LinkedInWatcher continuously in separate
-threads with automatic restart, health monitoring, and graceful shutdown.
-A BackgroundScheduler runs four automated tasks alongside the watchers.
+Runs FileWatcher, GmailWatcher, LinkedInWatcher, and WhatsAppWatcher
+continuously in separate threads with automatic restart, health monitoring,
+and graceful shutdown.  A BackgroundScheduler runs four automated tasks
+alongside the watchers.
 
 Usage
 -----
     python main.py
     python main.py --vault-path ~/AI_Employee_Vault --file-interval 60
     python main.py --gmail-interval 120 --linkedin-interval 180
+    python main.py --whatsapp-interval 60
     python main.py --no-scheduler
     python main.py --log-level DEBUG
+
+NOTE — WhatsApp first-time setup
+    WhatsApp Web requires a one-time QR code login before headless monitoring
+    can start.  If WhatsAppWatcher fails on first run, execute:
+        python watchers/whatsapp_watcher.py
+    A browser window will open — scan the QR code with your phone.
+    The session is saved to ~/.credentials/whatsapp_session/context.json and
+    all subsequent runs are fully automatic.
 """
 
 import argparse
@@ -36,6 +46,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from watchers.file_watcher import FileWatcher
 from watchers.gmail_watcher import GmailWatcher
 from watchers.linkedin_watcher import LinkedInWatcher
+from watchers.whatsapp_watcher import WhatsAppWatcher
 from helpers.dashboard_updater import update_activity, update_component_status
 from scheduler.scheduled_tasks import get_scheduled_tasks
 
@@ -58,6 +69,7 @@ BANNER = """
 |  [+] File Watcher      (60s  interval)                |
 |  [+] Gmail Watcher     (120s interval)                |
 |  [+] LinkedIn Watcher  (180s interval)                |
+|  [+] WhatsApp Watcher  (60s  interval)                |
 +-------------------------------------------------------+
 |  Starting scheduled tasks...                          |
 |  [+] Check Approval Timeouts  (every hour)            |
@@ -68,6 +80,9 @@ BANNER = """
 |  Dashboard :  AI_Employee_Vault/Dashboard.md          |
 |  Logs      :  logs/main.log                           |
 |  Press CTRL+C to stop.                                |
++-------------------------------------------------------+
+|  NOTE: WhatsApp requires first-time QR code login.    |
+|  If it fails, run: python watchers/whatsapp_watcher.py|
 +-------------------------------------------------------+
 """
 
@@ -80,12 +95,16 @@ BANNER_NO_SCHEDULER = """
 |  [+] File Watcher      (60s  interval)                |
 |  [+] Gmail Watcher     (120s interval)                |
 |  [+] LinkedIn Watcher  (180s interval)                |
+|  [+] WhatsApp Watcher  (60s  interval)                |
 +-------------------------------------------------------+
 |  Scheduler disabled (--no-scheduler)                  |
 +-------------------------------------------------------+
 |  Dashboard :  AI_Employee_Vault/Dashboard.md          |
 |  Logs      :  logs/main.log                           |
 |  Press CTRL+C to stop.                                |
++-------------------------------------------------------+
+|  NOTE: WhatsApp requires first-time QR code login.    |
+|  If it fails, run: python watchers/whatsapp_watcher.py|
 +-------------------------------------------------------+
 """
 
@@ -227,14 +246,16 @@ class WatcherThread:
         try:
             from helpers.dashboard_updater import update_stats, refresh_vault_counts
             component_map = {
-                "FileWatcher":     ("File Monitor",           "files_monitored"),
-                "GmailWatcher":    ("Gmail Monitor",          "emails_checked"),
-                "LinkedInWatcher": ("LinkedIn Monitor Skill", "linkedin_checked"),
+                "FileWatcher":      ("File Monitor",           "files_monitored"),
+                "GmailWatcher":     ("Gmail Monitor",          "emails_checked"),
+                "LinkedInWatcher":  ("LinkedIn Monitor Skill", "linkedin_checked"),
+                "WhatsAppWatcher":  ("WhatsApp Monitor",       "whatsapp_messages_checked"),
             }
             component, stat_key = component_map.get(self.name, (self.name, None))
             label = (
-                "file(s)"         if self.name == "FileWatcher"     else
-                "notification(s)" if self.name == "LinkedInWatcher" else
+                "file(s)"         if self.name == "FileWatcher"      else
+                "notification(s)" if self.name == "LinkedInWatcher"  else
+                "message(s)"      if self.name == "WhatsAppWatcher"  else
                 "email(s)"
             )
             activity = f"{component}: {n} new {label} detected"
@@ -310,6 +331,7 @@ class Orchestrator:
         file_interval: int,
         gmail_interval: int,
         linkedin_interval: int,
+        whatsapp_interval: int,
         enable_scheduler: bool = True,
     ):
         self.vault_path       = vault_path
@@ -341,6 +363,14 @@ class Orchestrator:
                 watcher_kwargs={
                     "vault_path":     vault_path,
                     "check_interval": linkedin_interval,
+                },
+            ),
+            WatcherThread(
+                name="WhatsAppWatcher",
+                watcher_cls=WhatsAppWatcher,
+                watcher_kwargs={
+                    "vault_path":     vault_path,
+                    "check_interval": whatsapp_interval,
                 },
             ),
         ]
@@ -518,6 +548,11 @@ def _parse_args() -> argparse.Namespace:
         help="LinkedInWatcher poll interval in seconds (default: 180)",
     )
     parser.add_argument(
+        "--whatsapp-interval",
+        type=int, default=60,
+        help="WhatsAppWatcher poll interval in seconds (default: 60)",
+    )
+    parser.add_argument(
         "--no-scheduler",
         action="store_true",
         help="Run without the background task scheduler",
@@ -540,21 +575,23 @@ def main() -> None:
     banner = BANNER_NO_SCHEDULER if args.no_scheduler else BANNER
     print(banner)
 
-    logger.info(f"Vault        : {args.vault_path}")
-    logger.info(f"File poll    : every {args.file_interval}s")
-    logger.info(f"Gmail poll   : every {args.gmail_interval}s")
-    logger.info(f"LinkedIn poll: every {args.linkedin_interval}s")
-    logger.info(f"Scheduler    : {'disabled' if args.no_scheduler else 'enabled'}")
+    logger.info(f"Vault          : {args.vault_path}")
+    logger.info(f"File poll      : every {args.file_interval}s")
+    logger.info(f"Gmail poll     : every {args.gmail_interval}s")
+    logger.info(f"LinkedIn poll  : every {args.linkedin_interval}s")
+    logger.info(f"WhatsApp poll  : every {args.whatsapp_interval}s")
+    logger.info(f"Scheduler      : {'disabled' if args.no_scheduler else 'enabled'}")
     logger.info(f"Log level    : {args.log_level}")
     logger.info(f"Log file     : {LOG_FILE}")
     logger.info("")
 
     orchestrator = Orchestrator(
-        vault_path        = Path(args.vault_path),
-        file_interval     = args.file_interval,
-        gmail_interval    = args.gmail_interval,
-        linkedin_interval = args.linkedin_interval,
-        enable_scheduler  = not args.no_scheduler,
+        vault_path         = Path(args.vault_path),
+        file_interval      = args.file_interval,
+        gmail_interval     = args.gmail_interval,
+        linkedin_interval  = args.linkedin_interval,
+        whatsapp_interval  = args.whatsapp_interval,
+        enable_scheduler   = not args.no_scheduler,
     )
 
     # ── Graceful shutdown on CTRL+C or SIGTERM ────────────────────────────────
