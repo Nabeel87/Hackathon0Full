@@ -47,7 +47,7 @@ MESSAGING_URL      = f"{LINKEDIN_BASE}/messaging/"
 NOTIFICATIONS_URL  = f"{LINKEDIN_BASE}/notifications/"
 
 # Page timeouts (ms)
-NAV_TIMEOUT     = 30_000
+NAV_TIMEOUT     = 60_000   # 60 seconds — increased from 30s for slow page loads
 ELEMENT_TIMEOUT = 10_000
 
 # Rate-limit back-off (seconds)
