@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Inbox/EMAIL_20260411_172434_19d7d932d1589941.md",
+                "file": "Dashboard.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "EMAIL_20260411_172434_19d7d932d1589941"
+              "title": "Dashboard"
             }
           }
         ]
@@ -185,8 +185,8 @@
   },
   "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
-    "Dashboard.md",
     "Inbox/EMAIL_20260411_172434_19d7d932d1589941.md",
+    "Dashboard.md",
     "Needs_Action/EMAIL_20260411_171946_19d7d8ec47f208ab.md",
     "Inbox/EMAIL_20260411_171659_19d7d8c388b225f6.md",
     "Inbox/EMAIL_20260411_171626_19d7d8bb23a6d201.md",
