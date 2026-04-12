@@ -78,6 +78,25 @@ _MSG_SNIPPET_SELECTORS = [
     "p[class*='message-snippet']",
 ]
 
+# Selectors that reliably contain the sender name in a thread row
+_SENDER_SELECTORS = [
+    "span.msg-conversation-listitem__participant-names",
+    "h3.msg-conversation-listitem__participant-names",
+    "div.msg-conversation-card__participant-names",
+    "span[aria-label*='Conversation with']",
+    ".nt-card__text--truncate",
+    ".notification-item__actor-name",
+    "span.actor-name",
+]
+
+# Compiled regexes for notification-badge detection (not real messages)
+_BADGE_PATTERNS = [
+    re.compile(r"^\d+\s+new\s+notification", re.IGNORECASE),   # "1 new notification"
+    re.compile(r"^\d+(\s+\d+)+\s+new\b", re.IGNORECASE),       # "1 1 new"
+    re.compile(r"^\d+\s+new$", re.IGNORECASE),                  # "3 new"
+    re.compile(r"^\d+$"),                                        # bare number
+]
+
 
 # ── LinkedInWatcher ───────────────────────────────────────────────────────────
 
