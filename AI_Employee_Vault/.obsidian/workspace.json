@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Approved/LINKEDIN_20260412_065113_message.md",
+                "file": "Pending_Approval/LINKEDIN_POST_20260412_120000.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "LINKEDIN_20260412_065113_message"
+              "title": "LINKEDIN_POST_20260412_120000"
             }
           }
         ]
@@ -185,9 +185,9 @@
   },
   "active": "132e4172d1ae6d09",
   "lastOpenFiles": [
+    "Approved/LINKEDIN_20260412_065113_message.md",
     "Pending_Approval/LINKEDIN_POST_20260412_120000.md",
     "Rejected/LINKEDIN_20260412_064828_message.md",
-    "Approved/LINKEDIN_20260412_065113_message.md",
     "Inbox/LINKEDIN_20260412_064615_message.md",
     "Dashboard.md",
     "Inbox/LINKEDIN_20260412_063327_message.md",

@@ -1,6 +1,6 @@
 # AI Employee Dashboard
 
-_Last updated: 2026-04-12 12:00:00_
+_Last updated: 2026-04-12 23:02:26_
 
 ---
 
@@ -38,7 +38,9 @@ _Last updated: 2026-04-12 12:00:00_
 
 ## 🔔 Pending Approvals
 
-Currently: 0 pending approvals
+Currently: 1 pending approval
+
+- `LINKEDIN_POST_20260412_120000.md` — LinkedIn post (Silver Tier milestone) — expires 2026-04-13T12:00:00
 
 Check `/Pending_Approval` folder for items awaiting decision.
 
@@ -46,6 +48,9 @@ Check `/Pending_Approval` folder for items awaiting decision.
 
 ## Recent Activity
 
+- `2026-04-12 23:02` -- Scheduler started — 4 automated tasks registered
+- `2026-04-12 23:02` -- Orchestrator started — all watchers launching
+- `2026-04-12 12:00` -- LinkedIn post submitted for approval: LINKEDIN_POST_20260412_120000.md
 - `2026-04-12 11:54` -- Orchestrator shut down gracefully
 - `2026-04-12 11:51` -- LinkedIn Monitor Skill: 1 new notification(s) detected
 - `2026-04-12 11:49` -- Scheduler started — 4 automated tasks registered
@@ -63,9 +68,6 @@ Check `/Pending_Approval` folder for items awaiting decision.
 - `2026-04-12 10:39` -- LinkedIn Monitor: 2 new notification(s) detected
 - `2026-04-12 10:35` -- LinkedIn Monitor: 3 new notification(s) detected
 - `2026-04-12 10:26` -- LinkedIn Monitor: 2 new notification(s) detected
-- `2026-04-12 10:22` -- LinkedIn Monitor: 4 new notification(s) detected
-- `2026-04-12 09:52` -- LinkedIn Monitor: 5 new notification(s) detected
-- `2026-04-12 09:39` -- LinkedIn Monitor: 2 new notification(s) detected
 
 ## Current Alerts
 
