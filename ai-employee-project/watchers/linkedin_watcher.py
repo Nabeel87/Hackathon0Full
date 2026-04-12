@@ -55,8 +55,7 @@ ELEMENT_TIMEOUT = 30_000   # 30 seconds — LinkedIn SPA injects content well af
 RATE_LIMIT_BACKOFF = 300
 
 # Notification types we care about (everything else is filtered as spam)
-# "message" is excluded — direct LinkedIn messages are skipped
-NOTIFICATION_TYPES = {"connection_request", "comment", "mention"}
+NOTIFICATION_TYPES = {"message", "connection_request", "comment", "mention"}
 
 
 # ── LinkedInWatcher ───────────────────────────────────────────────────────────
@@ -264,18 +263,6 @@ class LinkedInWatcher(BaseWatcher):
         items = []
         for thread in threads:
             try:
-                # Only process threads with an unread indicator
-                is_unread = bool(
-                    thread.query_selector(
-                        ".msg-conversation-card__unread-count, "
-                        "[class*='unread-count'], "
-                        "[class*='--unread'], "
-                        ".notification-badge"
-                    )
-                )
-                if not is_unread:
-                    continue
-
                 data = self._extract_notification_data(thread, page, default_type="message")
                 if data and data["id"] not in self._seen_ids:
                     items.append(data)
@@ -477,10 +464,10 @@ class LinkedInWatcher(BaseWatcher):
                 )
                 return []
 
-            # ── Scrape notifications only (messages are skipped) ─────────────
-            notifications = self._check_notifications(page)
+            # ── Scrape messages only (notifications are skipped) ─────────────
+            messages = self._check_messages(page)
 
-            items = notifications
+            items = messages
             # Deduplicate (both sources may occasionally surface the same item)
             seen: set[str] = set()
             unique_items: list[dict] = []
