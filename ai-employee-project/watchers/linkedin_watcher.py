@@ -57,6 +57,27 @@ RATE_LIMIT_BACKOFF = 300
 # Notification types we care about (everything else is filtered as spam)
 NOTIFICATION_TYPES = {"message", "connection_request", "comment", "mention"}
 
+# LinkedIn SPA injects UI chrome into inner_text(); strip everything from these
+# markers onward so two representations of the same message hash identically.
+_UI_ARTIFACTS = [
+    ". Active conversation",
+    ". Press return to go to",
+    ". Press Enter to",
+    "Open the options list",
+    "Open the options",
+    "conversation with",
+    "undefined",
+]
+
+# Targeted selectors for the actual message snippet inside a thread row
+_MSG_SNIPPET_SELECTORS = [
+    "span.msg-s-event-listitem__body",
+    "p.msg-s-message-group__meta",
+    "span.msg-conversation-card__message-snippet-body",
+    "span[class*='message-snippet']",
+    "p[class*='message-snippet']",
+]
+
 
 # ── LinkedInWatcher ───────────────────────────────────────────────────────────
 
@@ -100,6 +121,29 @@ class LinkedInWatcher(BaseWatcher):
             )
         except Exception as e:
             self.logger.warning("Could not save seen_ids file: %s", e)
+
+    # ── Content-similarity deduplication ─────────────────────────────────────
+
+    def is_duplicate_message(self, new_text: str, session_texts: list[str]) -> bool:
+        """
+        Return True when new_text is a near-duplicate of any text already
+        collected this poll session.
+
+        Both strings are cleaned of UI artifacts before comparison so that
+        "Nabil: check msg asap" and
+        "Nabil: check msg asap . Active conversation . Press return to go to"
+        resolve to the same core and are treated as duplicates.
+        """
+        clean_new = _clean_message_text(new_text)
+        if not clean_new:
+            return False
+        for existing in session_texts:
+            clean_existing = _clean_message_text(existing)
+            if clean_existing and (
+                clean_new in clean_existing or clean_existing in clean_new
+            ):
+                return True
+        return False
 
     # ── Session management ────────────────────────────────────────────────────
 
@@ -260,12 +304,30 @@ class LinkedInWatcher(BaseWatcher):
             "Messaging: %d thread row(s) found (title=%s)", len(threads), page.title()
         )
 
+        session_previews: list[str] = []   # track per-poll previews for content dedup
         items = []
         for thread in threads:
             try:
+                # Skip elements that are pure UI controls (aria-label only, no text)
+                if thread.get_attribute("aria-label") and not (thread.inner_text() or "").strip():
+                    continue
+
                 data = self._extract_notification_data(thread, page, default_type="message")
-                if data and data["id"] not in self._seen_ids:
-                    items.append(data)
+                if not data:
+                    continue
+                if data["id"] in self._seen_ids:
+                    continue
+
+                # Content-similarity check: catches same message scraped twice with
+                # different amounts of trailing UI chrome
+                if self.is_duplicate_message(data["content_preview"], session_previews):
+                    self.logger.debug(
+                        "Skipping duplicate message: %s...", data["content_preview"][:60]
+                    )
+                    continue
+
+                session_previews.append(data["content_preview"])
+                items.append(data)
             except Exception as exc:
                 self.logger.debug("Skipping thread parse error: %s", exc)
 
@@ -355,9 +417,12 @@ class LinkedInWatcher(BaseWatcher):
             or ""
         )
 
-        # ── Text content ──────────────────────────────────────────────────────
-        text = (element.inner_text() or "").strip()
-        if not text or len(text) < 5:
+        # ── Text content — clean UI artifacts immediately ─────────────────────
+        raw_text = (element.inner_text() or "").strip()
+        if not raw_text or len(raw_text) < 5:
+            return None
+        text = _clean_message_text(raw_text)
+        if not text:
             return None
 
         # ── Classify ──────────────────────────────────────────────────────────
@@ -368,8 +433,14 @@ class LinkedInWatcher(BaseWatcher):
             else:
                 return None  # skip promotional / system / job-alert noise
 
+        # ── Message-ID from data attributes (most stable dedup key) ──────────
+        msg_id = (
+            element.get_attribute("data-msg-id")
+            or element.get_attribute("data-event-id")
+            or element.get_attribute("data-message-id")
+        )
+
         # ── Sender name ───────────────────────────────────────────────────────
-        # Try dedicated name element first, fall back to first text line
         name_el = element.query_selector(
             ".msg-conversation-listitem__participant-names, "
             ".nt-card__text--truncate, "
@@ -384,8 +455,15 @@ class LinkedInWatcher(BaseWatcher):
 
         sender = sender[:80]  # safety cap
 
-        # ── Content preview (first 100 chars) ────────────────────────────────
-        preview = text[:100].replace("\n", " ").strip()
+        # ── Content preview — prefer targeted snippet selector ────────────────
+        snippet_text = None
+        for sel in _MSG_SNIPPET_SELECTORS:
+            el = element.query_selector(sel)
+            if el:
+                snippet_text = _clean_message_text((el.inner_text() or "").strip())
+                if snippet_text:
+                    break
+        preview = (snippet_text or text)[:100].replace("\n", " ").strip()
 
         # ── URL ───────────────────────────────────────────────────────────────
         link_el = element.query_selector("a[href]")
@@ -406,8 +484,8 @@ class LinkedInWatcher(BaseWatcher):
         )
         raw_time = time_el.inner_text().strip() if time_el else ""
 
-        # ── Stable ID fallback ────────────────────────────────────────────────
-        uid = uid or _make_uid(sender, notification_type, raw_time)
+        # ── Stable ID — prefer explicit msg/event id, then data-urn, then hash ─
+        uid = msg_id or uid or _make_uid(sender, notification_type, preview)
 
         return {
             "id": uid,
@@ -589,6 +667,23 @@ _Add context here as you process this notification._
 
 
 # ── Pure helpers ──────────────────────────────────────────────────────────────
+
+def _clean_message_text(text: str) -> str:
+    """
+    Strip LinkedIn UI artifacts from scraped inner_text().
+
+    LinkedIn's SPA appends accessibility / navigation strings to the visible
+    text, e.g. ". Active conversation . Press return to go to".  Two scrapes
+    of the same thread can return different amounts of trailing chrome, causing
+    false-new-message detections.  This function truncates at the first known
+    artifact so both variants resolve to the same core string.
+    """
+    cleaned = text
+    for artifact in _UI_ARTIFACTS:
+        if artifact in cleaned:
+            cleaned = cleaned.split(artifact)[0]
+    return cleaned.strip()
+
 
 def _classify_notification(text: str) -> str:
     """Map notification card text to one of the four known types, or 'other'."""
