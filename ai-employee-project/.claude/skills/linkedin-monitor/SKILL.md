@@ -91,6 +91,142 @@ If nothing new:
 
 ---
 
+## LinkedIn Message Format Details
+
+### Message Patterns Detected
+
+LinkedIn messages come in multiple formats that need special handling:
+
+**Pattern 1: Clean Message**
+```
+Sender Name: message text
+```
+Example: `"Nabil: check msg asap"`
+
+**Pattern 2: Message with UI Artifacts**
+```
+Sender Name [timestamp] Sender: message . Active conversation . Press return...
+```
+Example: `"Nabil Sabir 10:36 AM Nabil: check msg asap . Active conversation"`
+
+**Pattern 3: Notification Badges (Filtered Out)**
+```
+Just numbers indicating unread count
+```
+Examples: `"1 new notification"`, `"1 1 new"` — these are **not** actual messages and are filtered out.
+
+---
+
+### Deduplication Logic
+
+The watcher implements two layers of deduplication to avoid creating multiple task cards for the same message:
+
+**Layer 1 — Seen-ID persistence** (`linkedin_seen_ids.json`)
+Every processed item's `id` is written to disk. On the next poll, any item whose `id` is already in that file is skipped before any other processing.
+
+**Layer 2 — Content-similarity check (per-poll session)**
+Within a single poll cycle, a `session_previews` list tracks the cleaned preview of every item accepted so far. Before accepting a new item, `is_duplicate_message()` strips UI artifacts from both strings and checks substring containment:
+
+| Raw text scraped | Cleaned core | Result |
+|---|---|---|
+| `"Nabil: check msg asap"` | `"Nabil: check msg asap"` | ✅ Accepted |
+| `"Nabil: check msg asap . Active conversation . Press return to go to"` | `"Nabil: check msg asap"` | ⏭️ Skipped (duplicate) |
+| `"1 new notification"` | filtered as `"other"` type | ⏭️ Skipped (badge) |
+
+**UI Artifacts Stripped**
+
+The following strings and everything after them are removed from scraped text before any comparison or storage:
+
+```
+. Active conversation
+. Press return to go to
+. Press Enter to
+Open the options list
+Open the options
+conversation with
+undefined
+```
+
+---
+
+### Data Extraction
+
+**Sender Name Extraction**
+1. Tries dedicated DOM selectors: `.msg-conversation-listitem__participant-names`, `.nt-card__text--truncate`, `.notification-item__actor-name`, `span.actor-name`
+2. Falls back to the first non-empty line of cleaned `inner_text()`
+
+**Message Text Cleaning**
+1. Read raw `inner_text()` from the thread element
+2. Pass through `_clean_message_text()` — truncates at first UI artifact
+3. Use cleaned text for classification, sender extraction, and preview
+
+**Content Preview**
+1. Try targeted snippet selectors first (actual message body elements):
+   - `span.msg-s-event-listitem__body`
+   - `span.msg-conversation-card__message-snippet-body`
+   - `span[class*='message-snippet']`
+2. Fall back to first 100 chars of the cleaned full text
+
+**Message ID (for deduplication)**
+Priority order:
+1. `data-msg-id` attribute
+2. `data-event-id` attribute
+3. `data-message-id` attribute
+4. `data-urn` / `data-entity-urn` / `data-notification-id` / `data-conversation-id`
+5. Fallback hash: `_make_uid(sender, type, preview)` — uses **cleaned preview**, not raw timestamp
+
+---
+
+### Filtering Rules
+
+**Messages are SKIPPED if:**
+- No text or text shorter than 5 characters after cleaning
+- `notification_type` resolves to `"other"` and no `default_type` override applies
+- `id` already present in `_seen_ids` (persistent dedup)
+- Content-similar to a message already collected this poll cycle (session dedup)
+- Element has `aria-label` attribute but no visible text (pure UI control)
+
+**Messages are PROCESSED if:**
+- Cleaned text ≥ 5 characters
+- Valid notification type resolved
+- ID not previously seen
+- Not a content-duplicate within the current poll session
+
+---
+
+### Priority Detection
+
+`priority: high` is set when the message text (after cleaning) contains any of:
+
+```
+urgent  asap  important  invoice  payment
+```
+
+All other items use `priority: normal`.
+
+---
+
+### Known Limitations
+
+1. **LinkedIn UI Changes** — LinkedIn frequently updates their SPA structure. Selectors and UI artifact strings may need updating if messages stop appearing.
+2. **Session Expiry** — Browser session expires after ~30 days of inactivity. Delete `context.json` and re-run `watchers/linkedin_watcher.py` to re-authenticate.
+3. **Rate Limiting** — Excessive checks (multiple per minute) may trigger LinkedIn's checkpoint/captcha flow. The watcher backs off for 300 seconds when detected.
+4. **Headless Mode** — Some LinkedIn features (video calls, certain modal flows) do not render in headless Chromium. The messaging list used here works reliably headless.
+
+---
+
+### Troubleshooting
+
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| Duplicate task cards created | New UI artifact string not in `_UI_ARTIFACTS` | Add the artifact to `_UI_ARTIFACTS` in `linkedin_watcher.py` |
+| Wrong sender name extracted | LinkedIn changed name-element class | Update selectors in `_extract_notification_data()` |
+| UI artifact text appears in card preview | Artifact string not yet in `_UI_ARTIFACTS` | Add it to the list |
+| 0 messages found despite unread threads visible | Unread-indicator selector mismatch (removed) | Verify `_check_messages` scrapes all threads, not just unread |
+| `"undefined"` in preview | LinkedIn SPA rendered placeholder | Already stripped by `_clean_message_text()` — if still appears, check artifact list |
+
+---
+
 ## How to Run
 
 Call the watcher in single-check mode — instantiate the class, call
@@ -193,6 +329,59 @@ LinkedIn session expired. Delete context.json and re-run the watcher to log in a
 ```
 LinkedIn rate limit detected. Try again in a few minutes.
 ```
+
+---
+
+## Technical Details
+
+### Message Processing Pipeline
+
+```
+LinkedIn /messaging/ page
+        │
+        ▼
+Extract thread <li> elements
+        │
+        ├─ Skip: aria-label-only UI controls
+        │
+        ▼
+For each thread element:
+  1. inner_text() → _clean_message_text()     (strip UI artifacts)
+  2. _classify_notification()                 (type or "other")
+  3. Extract sender name (DOM selector → fallback to first line)
+  4. Extract preview (snippet selector → fallback to text[:100])
+  5. Resolve stable ID (msg-id attr → data-urn → hash of sender+preview)
+  6. Check _seen_ids                          (persistent dedup — skip if seen)
+  7. is_duplicate_message()                   (session dedup — skip if similar)
+  8. _infer_priority()                        (high / normal)
+        │
+        ▼
+Return new unique items
+        │
+        ▼
+create_action_file() per item → Inbox/LINKEDIN_<ts>_<type>.md
+        │
+        ▼
+_save_seen_ids() → linkedin_seen_ids.json
+_save_session()  → context.json (refresh browser state)
+```
+
+### Deduplication Strategy
+
+| Layer | Scope | Storage | Key |
+|---|---|---|---|
+| Seen-ID | Across sessions | `linkedin_seen_ids.json` on disk | `data-urn` / `data-msg-id` / hash |
+| Content-similarity | Within one poll cycle | In-memory `session_previews` list | Cleaned preview substring match |
+
+### Key Functions
+
+| Function | Location | Purpose |
+|---|---|---|
+| `_clean_message_text(text)` | module-level helper | Strip UI artifacts from raw inner_text |
+| `is_duplicate_message(new, existing)` | `LinkedInWatcher` method | Session-level content similarity check |
+| `_extract_notification_data(el, page, type)` | `LinkedInWatcher` method | Parse one element into a notification dict |
+| `_check_messages(page)` | `LinkedInWatcher` method | Scrape /messaging/, apply both dedup layers |
+| `_make_uid(sender, type, preview)` | module-level helper | Stable fallback ID from cleaned content |
 
 ---
 
