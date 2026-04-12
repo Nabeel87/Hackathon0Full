@@ -674,24 +674,30 @@ class LinkedInWatcher(BaseWatcher):
 
     def create_action_file(self, item: dict) -> Path:
         """
-        Write a LINKEDIN_<timestamp>_<type>.md card to vault Inbox/.
-        Logs: "Created LINKEDIN_xxx.md for <type> from <sender>"
+        Write a LINKEDIN_<timestamp>_<type>.md card to the vault.
+
+        Routing by priority:
+          high   → Needs_Action/   (requires prompt attention)
+          normal → Inbox/          (standard triage queue)
+
         Returns the created file path.
         """
-        vault_inbox = self.vault_path / "Inbox"
-        vault_inbox.mkdir(parents=True, exist_ok=True)
+        priority = item["priority"]
+        folder_name = "Needs_Action" if priority == "high" else "Inbox"
+        target_folder = self.vault_path / folder_name
+        target_folder.mkdir(parents=True, exist_ok=True)
 
         dt: datetime = item["received"]
         ts_slug      = dt.strftime("%Y%m%d_%H%M%S")
         ntype        = item["notification_type"]
         sender       = item["from"]
 
-        card_path = vault_inbox / f"LINKEDIN_{ts_slug}_{ntype}.md"
+        card_path = target_folder / f"LINKEDIN_{ts_slug}_{ntype}.md"
 
         # Avoid filename collisions in the same second
         counter = 1
         while card_path.exists():
-            card_path = vault_inbox / f"LINKEDIN_{ts_slug}_{ntype}_{counter}.md"
+            card_path = target_folder / f"LINKEDIN_{ts_slug}_{ntype}_{counter}.md"
             counter += 1
 
         received_iso = dt.strftime("%Y-%m-%dT%H:%M:%S")
@@ -741,7 +747,8 @@ _Add context here as you process this notification._
         )
 
         self.logger.info(
-            "Created %s for %s from %s", card_path.name, ntype, sender
+            "Created %s in %s/ (priority: %s, type: %s, from: %s)",
+            card_path.name, folder_name, priority, ntype, sender,
         )
         return card_path
 
@@ -813,7 +820,12 @@ def _infer_priority(text: str, notification_type: str) -> str:
     """Return 'high' for urgent-keyword messages; 'normal' otherwise."""
     if notification_type == "message":
         t = text.lower()
-        if any(kw in t for kw in ("urgent", "asap", "important", "invoice", "payment")):
+        if any(kw in t for kw in (
+            "urgent", "asap", "emergency", "critical",
+            "deadline", "important", "action required",
+            "immediately", "right now", "waiting",
+            "invoice", "payment",
+        )):
             return "high"
     return "normal"
 
