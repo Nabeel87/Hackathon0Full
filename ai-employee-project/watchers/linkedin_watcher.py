@@ -367,8 +367,15 @@ class LinkedInWatcher(BaseWatcher):
         items = []
         for thread in threads:
             try:
-                # Skip elements that are pure UI controls (aria-label only, no text)
-                if thread.get_attribute("aria-label") and not (thread.inner_text() or "").strip():
+                raw = (thread.inner_text() or "").strip()
+
+                # Skip pure UI controls (aria-label only, no visible text)
+                if thread.get_attribute("aria-label") and not raw:
+                    continue
+
+                # Early badge filter — avoids calling the full extractor for counts
+                if self.is_notification_badge(_clean_message_text(raw)):
+                    self.logger.debug("Skipping badge element: %s", raw[:40])
                     continue
 
                 data = self._extract_notification_data(thread, page, default_type="message")
@@ -484,6 +491,11 @@ class LinkedInWatcher(BaseWatcher):
         if not text:
             return None
 
+        # ── Badge guard — skip unread-count DOM nodes ─────────────────────────
+        if self.is_notification_badge(text):
+            self.logger.debug("Skipping notification badge: %s", text[:40])
+            return None
+
         # ── Classify ──────────────────────────────────────────────────────────
         notification_type = _classify_notification(text)
         if notification_type == "other":
@@ -499,18 +511,17 @@ class LinkedInWatcher(BaseWatcher):
             or element.get_attribute("data-message-id")
         )
 
-        # ── Sender name ───────────────────────────────────────────────────────
-        name_el = element.query_selector(
-            ".msg-conversation-listitem__participant-names, "
-            ".nt-card__text--truncate, "
-            ".notification-item__actor-name, "
-            "span.actor-name"
-        )
-        if name_el:
-            sender = (name_el.inner_text() or "").strip().splitlines()[0]
-        else:
+        # ── Sender name — dedicated selector first, text fallback last ────────
+        sender = self.extract_sender_name(element)
+        if not sender:
+            # Fallback: first clean line of text that doesn't look like a message
             lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-            sender = lines[0] if lines else "Unknown"
+            for line in lines:
+                if ":" not in line and len(line) < 60:
+                    sender = line
+                    break
+            if not sender:
+                sender = lines[0] if lines else "Unknown"
 
         sender = sender[:80]  # safety cap
 
@@ -605,13 +616,23 @@ class LinkedInWatcher(BaseWatcher):
             messages = self._check_messages(page)
 
             items = messages
-            # Deduplicate (both sources may occasionally surface the same item)
-            seen: set[str] = set()
+            # ── Final dedup pass: ID + content fingerprint ────────────────────
+            seen_ids: set[str] = set()
+            seen_fingerprints: set[str] = set()
             unique_items: list[dict] = []
             for item in items:
-                if item["id"] not in seen and item["id"] not in self._seen_ids:
-                    seen.add(item["id"])
-                    unique_items.append(item)
+                if item["id"] in seen_ids or item["id"] in self._seen_ids:
+                    continue
+                # Fingerprint: lowercase sender + first 50 chars of preview
+                fp = f"{item['from'].lower()}:{item['content_preview'][:50].lower()}"
+                if fp in seen_fingerprints:
+                    self.logger.debug(
+                        "Skipping fingerprint duplicate from %s", item["from"]
+                    )
+                    continue
+                seen_ids.add(item["id"])
+                seen_fingerprints.add(fp)
+                unique_items.append(item)
 
             for item in unique_items:
                 self._seen_ids.add(item["id"])
