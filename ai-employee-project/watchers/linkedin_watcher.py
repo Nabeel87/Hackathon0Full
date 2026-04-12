@@ -164,6 +164,46 @@ class LinkedInWatcher(BaseWatcher):
                 return True
         return False
 
+    def is_notification_badge(self, text: str) -> bool:
+        """
+        Return True when text is a LinkedIn unread-count badge, not a real message.
+
+        Badges are DOM elements that show numeric counts (e.g. "1 new notification",
+        "1 1 new", "3").  They must be filtered before creating task cards.
+        """
+        t = text.strip()
+        for pattern in _BADGE_PATTERNS:
+            if pattern.match(t):
+                return True
+        # Short string that is purely numeric after stripping spaces
+        if len(t) < 5 and t.replace(" ", "").isdigit():
+            return True
+        return False
+
+    def extract_sender_name(self, element) -> str:
+        """
+        Extract the actual conversation-partner name from a thread element.
+
+        Tries dedicated name-element selectors first.  Validates that the result
+        looks like a name (short, contains no colon) before accepting it, so
+        message content is never returned as the sender.
+
+        Returns an empty string when no valid name is found; callers must provide
+        a fallback.
+        """
+        for selector in _SENDER_SELECTORS:
+            el = element.query_selector(selector)
+            if not el:
+                continue
+            name = (el.inner_text() or "").strip().splitlines()[0]
+            # Strip accessibility prefix added by LinkedIn
+            if "Conversation with" in name:
+                name = name.replace("Conversation with", "").strip()
+            # Accept only if it looks like a name, not message content
+            if name and len(name) < 60 and ":" not in name:
+                return name
+        return ""
+
     # ── Session management ────────────────────────────────────────────────────
 
     def _ensure_session(self) -> bool:
@@ -691,16 +731,28 @@ def _clean_message_text(text: str) -> str:
     """
     Strip LinkedIn UI artifacts from scraped inner_text().
 
-    LinkedIn's SPA appends accessibility / navigation strings to the visible
-    text, e.g. ". Active conversation . Press return to go to".  Two scrapes
-    of the same thread can return different amounts of trailing chrome, causing
-    false-new-message detections.  This function truncates at the first known
-    artifact so both variants resolve to the same core string.
+    Three passes:
+    1. Truncate at any known UI artifact marker.
+    2. Remove inline timestamps (e.g. "10:36 AM", "9:05 PM").
+    3. Remove the doubled sender-name prefix LinkedIn injects into thread rows:
+       "Nabil Sabir Nabil: check msg" → "Nabil: check msg"
     """
     cleaned = text
+    # Pass 1 — truncate at UI artifact markers
     for artifact in _UI_ARTIFACTS:
         if artifact in cleaned:
             cleaned = cleaned.split(artifact)[0]
+    # Pass 2 — strip inline timestamps
+    cleaned = re.sub(r"\s*\d{1,2}:\d{2}\s*[AP]M\b", "", cleaned)
+    # Pass 3 — remove doubled sender prefix before "Name: message"
+    # Matches the first "Word: non-space" pattern; if the matched word also
+    # appears in the text before that position it is a repetition → strip it.
+    m = re.search(r"\b(\w+):\s+\S", cleaned)
+    if m and m.start() > 0:
+        prefix = cleaned[: m.start()]
+        name_token = m.group(1)
+        if re.search(r"\b" + re.escape(name_token) + r"\b", prefix):
+            cleaned = cleaned[m.start() :]
     return cleaned.strip()
 
 
