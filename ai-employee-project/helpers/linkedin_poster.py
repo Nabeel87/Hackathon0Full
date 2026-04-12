@@ -14,10 +14,13 @@ From Python:
 CLI:
     python helpers/linkedin_poster.py --content "My post text"
     python helpers/linkedin_poster.py --test
+    python helpers/linkedin_poster.py --content "My post text" --test-mode
+    LINKEDIN_TEST_MODE=true python helpers/linkedin_poster.py --content "My post text"
 """
 
 import argparse
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -347,6 +350,22 @@ def post_to_linkedin(
             "error":     error_msg,
         }
 
+    # ── Test mode ─────────────────────────────────────────────────────────────
+    if os.getenv("LINKEDIN_TEST_MODE", "false").lower() == "true":
+        logger.info("TEST MODE: Simulating LinkedIn post (not actually posting)")
+        logger.info("TEST MODE: Would have posted: %s…", preview[:100])
+        simulated_id  = "test_post_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+        simulated_url = f"https://www.linkedin.com/posts/test-{simulated_id}"
+        _log_outcome(logger, True, preview, simulated_url)
+        return {
+            "success":   True,
+            "post_url":  simulated_url,
+            "post_id":   simulated_id,
+            "timestamp": now_iso,
+            "test_mode": True,
+            "error":     None,
+        }
+
     # ── Session gate ──────────────────────────────────────────────────────────
     if not _session_exists(s_dir):
         return _fail("LinkedIn session not found. Run watcher first.")
@@ -400,9 +419,10 @@ def post_to_linkedin(
 
 def test_linkedin_post() -> dict:
     """
-    Post a fixed test message to LinkedIn (non-interactive).
+    Simulate a post using LINKEDIN_TEST_MODE — no session required, nothing published.
     Run:  python helpers/linkedin_poster.py --test
     """
+    os.environ["LINKEDIN_TEST_MODE"] = "true"
     test_content = "Test post from AI Employee system - testing LinkedIn integration!"
     result = post_to_linkedin(test_content)
     print(f"Result: {result}")
@@ -424,9 +444,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--test",
         action="store_true",
-        help="Post a fixed test message (non-interactive)",
+        help="Simulate posting a fixed test message via LINKEDIN_TEST_MODE",
+    )
+    parser.add_argument(
+        "--test-mode",
+        action="store_true",
+        help="Set LINKEDIN_TEST_MODE=true for this run (use with --content)",
     )
     args = parser.parse_args()
+
+    if args.test_mode:
+        os.environ["LINKEDIN_TEST_MODE"] = "true"
 
     if args.test:
         test_linkedin_post()
