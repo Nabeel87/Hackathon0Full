@@ -55,7 +55,8 @@ ELEMENT_TIMEOUT = 30_000   # 30 seconds — LinkedIn SPA injects content well af
 RATE_LIMIT_BACKOFF = 300
 
 # Notification types we care about (everything else is filtered as spam)
-NOTIFICATION_TYPES = {"message", "connection_request", "comment", "mention"}
+# "message" is excluded — direct LinkedIn messages are skipped
+NOTIFICATION_TYPES = {"connection_request", "comment", "mention"}
 
 
 # ── LinkedInWatcher ───────────────────────────────────────────────────────────
@@ -476,11 +477,10 @@ class LinkedInWatcher(BaseWatcher):
                 )
                 return []
 
-            # ── Scrape both sources ───────────────────────────────────────────
-            messages      = self._check_messages(page)
+            # ── Scrape notifications only (messages are skipped) ─────────────
             notifications = self._check_notifications(page)
 
-            items = messages + notifications
+            items = notifications
             # Deduplicate (both sources may occasionally surface the same item)
             seen: set[str] = set()
             unique_items: list[dict] = []
