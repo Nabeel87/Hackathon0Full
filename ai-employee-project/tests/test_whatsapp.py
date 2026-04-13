@@ -27,7 +27,7 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 _VAULT           = Path("C:/Users/GEO COMPUTERS/Desktop/Hackathon/Hackathon0Full/AI_Employee_Vault")
-_CREDENTIALS_DIR = Path.home() / ".credentials" / "whatsapp_session"
+_CREDENTIALS_DIR = _PROJECT_ROOT / ".credentials" / "whatsapp_session"
 _SESSION_FILE    = _CREDENTIALS_DIR / "context.json"
 
 
@@ -123,8 +123,8 @@ class TestWhatsAppIntegration(unittest.TestCase):
             f"check_interval should be 60, got {watcher.check_interval}",
         )
         self.assertEqual(
-            watcher.session_path, Path.home() / ".credentials" / "whatsapp_session",
-            "session_path must point to ~/.credentials/whatsapp_session",
+            watcher.session_path, _PROJECT_ROOT / ".credentials" / "whatsapp_session",
+            "session_path must point to <project>/.credentials/whatsapp_session",
         )
         self.assertIsInstance(watcher.keywords, list, "keywords must be a list")
         self.assertGreater(len(watcher.keywords), 0, "keywords list must not be empty")
@@ -139,6 +139,10 @@ class TestWhatsAppIntegration(unittest.TestCase):
         self.assertIsInstance(
             watcher._seen_ids, set,
             "_seen_ids must be a set for O(1) deduplication",
+        )
+        self.assertEqual(
+            watcher._profile_dir, _PROJECT_ROOT / ".credentials" / "whatsapp_session" / "chrome_profile",
+            "_profile_dir must point to chrome_profile inside session_path",
         )
 
         # Required methods
@@ -314,7 +318,7 @@ class TestWhatsAppIntegration(unittest.TestCase):
 
         self.assertTrue(writable, f"Session directory is not writable: {_CREDENTIALS_DIR}")
 
-        if _SESSION_FILE.exists() and _SESSION_FILE.stat().st_size > 20:
+        if _SESSION_FILE.exists() and _SESSION_FILE.stat().st_size > 10:
             print(f"  context.json  : FOUND ({_SESSION_FILE.stat().st_size:,} bytes)")
         else:
             print("  context.json  : NOT FOUND (first-time QR login required)")
@@ -758,6 +762,69 @@ class TestWhatsAppIntegration(unittest.TestCase):
         print(f"  detect_priority          : OK")
         print(f"  create_message_fingerprint: OK")
         print(f"  format_whatsapp_task     : OK")
+
+
+    # ── 13. _already_logged deduplication: text-based fallback ───────────────
+
+    def test_13_already_logged_text_fallback(self):
+        """_already_logged() catches duplicates by message text even when message_id differs.
+
+        Scenario: "Let's meeting tomorrow morning" was originally saved as part
+        of a combined card "Fix meeting | Let's meeting tomorrow morning" with a
+        combined-string SHA-1.  Later, the split fix produces the segment alone
+        with a *new* individual SHA-1.  The old message_id won't match, but the
+        text IS present in the existing vault file — so _already_logged must
+        still return True.
+        """
+        import tempfile
+        from watchers.whatsapp_watcher import _already_logged
+
+        # Build a temp vault with an Inbox/ folder
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_vault = Path(tmp)
+            inbox     = tmp_vault / "Inbox"
+            inbox.mkdir()
+
+            # Write a card whose message_id is the OLD combined-string hash
+            old_id  = "parishay_oldhash123456"
+            segment = "Let's meeting tomorrow morning"
+            card    = inbox / "WHATSAPP_20260413_120000_parishay.md"
+            card.write_text(
+                f'---\nmessage_id: "{old_id}"\npriority: normal\n---\n'
+                f'## Message Preview\n\n{segment}\n',
+                encoding="utf-8",
+            )
+
+            # NEW individual-segment hash — different from old_id
+            new_id = "parishay_newhash999999"
+
+            # ID-only check: must return False (old ID not present)
+            self.assertFalse(
+                _already_logged(new_id, tmp_vault),
+                "_already_logged must return False when only checking by msg_id and it differs",
+            )
+
+            # Text fallback check: must return True (text IS in the file)
+            self.assertTrue(
+                _already_logged(new_id, tmp_vault, text=segment),
+                "_already_logged must return True when message text matches existing vault card",
+            )
+
+            # Exact old ID still found
+            self.assertTrue(
+                _already_logged(old_id, tmp_vault),
+                "_already_logged must still find old cards by message_id",
+            )
+
+            # Different text → no match
+            self.assertFalse(
+                _already_logged(new_id, tmp_vault, text="Send amount before evening"),
+                "_already_logged must return False when text does not appear in any vault card",
+            )
+
+        print(f"\n  ID-based match         : OK")
+        print(f"  Text-based fallback    : OK (catches old/combined-hash duplicates)")
+        print(f"  Non-matching text      : correctly returns False")
 
 
 # ── Standalone runner ─────────────────────────────────────────────────────────
